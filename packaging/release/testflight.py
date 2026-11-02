@@ -4,12 +4,30 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
 import zipfile
 
-from release import ROOT, require, run, version
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def require(name):
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Set {name} before building a release.")
+    return value
+
+
+def run(*args, **kwargs):
+    return subprocess.run([str(value) for value in args], check=True, **kwargs)
+
+
+def version(value):
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){0,3}", value) or any(int(part) > 2**64 - 1 for part in value.split('.')):
+        raise ValueError("Use a numeric release version, such as 1.0.1.")
+    return value
 
 BUNDLE = "com.johansardar.applebridge.ios"
 PROFILE_SETTINGS = {
@@ -75,7 +93,7 @@ def main():
         identity = require("IOS_DISTRIBUTION_IDENTITY")
         keychain = Path(require("RELEASE_KEYCHAIN")).expanduser().resolve()
         if not keychain.is_file() or keychain.name == "login.keychain-db":
-            raise ValueError("Use the dedicated release keychain prepared by signing.py.")
+            raise ValueError("Use the dedicated release keychain configured for Apple Distribution.")
         for name in ["ASC_KEY_PATH", "ASC_KEY_ID", "ASC_ISSUER_ID"]:
             require(name)
         destination.mkdir(parents=True)

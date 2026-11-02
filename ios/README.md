@@ -1,4 +1,6 @@
-# iPhone companion
+# iPhone app guide
+
+Build commands run from the root of `apple-bridge-iphone`. Gateway scenario commands run from the separate `apple-bridge` checkout with `APPLE_BRIDGE_IPHONE_ROOT` pointing here.
 
 Requires Xcode 26.4+, XcodeGen (`brew install xcodegen`), an Apple Development signing identity and a matching development profile at `~/.config/apple-bridge/ios/dev.mobileprovision`.
 
@@ -50,8 +52,6 @@ APP-SCREENTIME-SIM compiles the same Swift shield policy against a fake ManagedS
 Location (C7): enable Location, tap Allow Location, then enable Always and Precise Location in iOS Settings. `iphone.location.current` takes `device_id`; `iphone.geofence.add` also takes `name`, `latitude`, `longitude`, and `radius` in meters (maximum 20 named regions); `iphone.geofence.remove` takes `name`; `iphone.geofence.list` republishes the named region definitions. `iphone.location.significant` takes `enabled`. Background monitoring requires Always authorization; current location requires full accuracy. The phone retains monitoring settings across launches and queues records atomically until a signed upload succeeds.
 
 Read `iphone.location` with the `iphone:read` grant for precise samples, named geofences, and `arrive`, `leave`, or `significant` events. Records are scoped to their paired device and deduplicated on retry. Removing a geofence publishes `geofence_removed`. Command receipts contain counts and monitoring state, never coordinates; location payloads travel on the separate signed record-ingestion endpoint. iOS controls background delivery timing. APP-LOC-SIM compiles and runs the actual Swift location store with a fake adapter, then uploads its records through the signed gateway endpoint and checks durable deduplication. APP-LOC-REAL is `limited: needs Allow tap`.
-
-The dormant `AppleBridgeLocationPush` extension target is deliberately not embedded. After approval, provision its own App ID, managed entitlement and matching App Group on both targets, set `ABLocationPushAppGroup` consistently, set both location approval gates, and embed the extension. It ignores push contents and refreshes only a protected local snapshot when the shared user switch is on and Always authorization is present. The signed gateway command returns the location-push token (hex) and latest snapshot with its date; the extension never transmits location itself. Disable clears the snapshot. A location-push provider must use APNs location push type and topic `com.johansardar.applebridge.ios.location-query`; the normal background-command APNs path does not send location pushes.
 
 App Intents live beside each capability's handlers in `<Capability>Intents.swift`. Each command has a concrete intent returning its JSON result; commands with arguments expose an Arguments JSON text parameter using the same command fields above (local execution supplies `device_id: iphone:local` automatically). Intents use `CommandHandlers.all`, so disabled capabilities remain disabled and adapter permission checks still apply. Failures propagate to Shortcuts. Ping is always available.
 
