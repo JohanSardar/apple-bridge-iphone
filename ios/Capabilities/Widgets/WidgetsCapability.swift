@@ -1,10 +1,15 @@
 import ActivityKit
+import CryptoKit
 import Foundation
 import WidgetKit
 
 @MainActor
 enum WidgetsCapability {
-    static let descriptor = Capability(id: "widgets", title: "Live Activities and widgets", permission: "Enable to share ActivityKit push tokens", available: true)
+    static let descriptor = Capability(id: "widgets", title: "Live Activities and widgets", permission: "Enable to share ActivityKit push tokens", available: true, deferredHandlers: [
+        "iphone.live.start": { try await apply($0, ending: false) },
+        "iphone.live.update": { try await apply($0, ending: false) },
+        "iphone.live.end": { try await apply($0, ending: true) },
+    ])
     private static var observers: [Task<Void, Never>] = []
     private static var activityIDs: Set<String> = []
 
@@ -68,6 +73,30 @@ enum WidgetsCapability {
                 try? await Task.sleep(for: .seconds(30))
             }
         }
+    }
+
+    private static func apply(_ job: PhoneJob, ending: Bool) async throws -> Data? {
+        let arguments = job.command.args
+        guard case .string(let task) = arguments["task_id"], case .string(let title) = arguments["title"] else { throw IdentityError.requestFailed }
+        var status = ""
+        if case .string(let value) = arguments["status"] { status = value }
+        var progress = 0.0
+        if case .number(let value) = arguments["progress"] { progress = value }
+        let encryption = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: DeviceIdentity.load().encryption).publicKey.rawRepresentation
+        let handle = PairingClient.liveHandle(encryptionKey: encryption, task: task)
+        var match: Activity<AgentTaskAttributes>?
+        for attempt in 0..<20 {
+            match = Activity<AgentTaskAttributes>.activities.first { $0.attributes.taskID == handle || $0.attributes.taskID == task }
+            if match != nil || ending { break }
+            if attempt < 19 { try await Task.sleep(for: .milliseconds(500)) }
+        }
+        guard let activity = match else {
+            if ending { return Data(#"{"applied":false}"#.utf8) }
+            throw IdentityError.requestFailed
+        }
+        let content = ActivityContent(state: AgentTaskAttributes.ContentState(status: status, progress: progress, title: title), staleDate: nil)
+        if ending { await activity.end(content, dismissalPolicy: .default) } else { await activity.update(content) }
+        return Data(#"{"applied":true}"#.utf8)
     }
 
     static func status(_ value: String) {
