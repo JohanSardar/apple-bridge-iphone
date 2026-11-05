@@ -84,19 +84,16 @@ enum WidgetsCapability {
         if case .number(let value) = arguments["progress"] { progress = value }
         let encryption = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: DeviceIdentity.load().encryption).publicKey.rawRepresentation
         let handle = PairingClient.liveHandle(encryptionKey: encryption, task: task)
-        var match: Activity<AgentTaskAttributes>?
+        let content = ActivityContent(state: AgentTaskAttributes.ContentState(status: status, progress: progress, title: title), staleDate: nil)
         for attempt in 0..<20 {
-            match = Activity<AgentTaskAttributes>.activities.first { $0.attributes.taskID == handle || $0.attributes.taskID == task }
-            if match != nil || ending { break }
+            for activity in Activity<AgentTaskAttributes>.activities where activity.attributes.taskID == handle || activity.attributes.taskID == task {
+                if ending { await activity.end(content, dismissalPolicy: .default) } else { await activity.update(content) }
+                return Data(#"{"applied":true}"#.utf8)
+            }
+            if ending { return Data(#"{"applied":false}"#.utf8) }
             if attempt < 19 { try await Task.sleep(for: .milliseconds(500)) }
         }
-        guard let activity = match else {
-            if ending { return Data(#"{"applied":false}"#.utf8) }
-            throw IdentityError.requestFailed
-        }
-        let content = ActivityContent(state: AgentTaskAttributes.ContentState(status: status, progress: progress, title: title), staleDate: nil)
-        if ending { await activity.end(content, dismissalPolicy: .default) } else { await activity.update(content) }
-        return Data(#"{"applied":true}"#.utf8)
+        throw IdentityError.requestFailed
     }
 
     static func status(_ value: String) {
