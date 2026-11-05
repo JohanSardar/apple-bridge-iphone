@@ -14,7 +14,7 @@ struct AgentTaskWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentTaskAttributes.self) { context in
             VStack(alignment: .leading) {
-                Label(context.attributes.title, systemImage: "terminal")
+                Label(context.state.title ?? context.attributes.title, systemImage: "terminal")
                 Text(context.state.status)
                 ProgressView(value: context.state.progress)
             }.padding()
@@ -23,7 +23,7 @@ struct AgentTaskWidget: Widget {
                 DynamicIslandExpandedRegion(.leading) { Image(systemName: "terminal") }
                 DynamicIslandExpandedRegion(.trailing) { Text(context.state.progress, format: .percent.precision(.fractionLength(0))) }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack { Text(context.attributes.title); Text(context.state.status); ProgressView(value: context.state.progress) }
+                    VStack { Text(context.state.title ?? context.attributes.title); Text(context.state.status); ProgressView(value: context.state.progress) }
                 }
             } compactLeading: { Image(systemName: "terminal") }
             compactTrailing: { Text(context.state.progress, format: .percent.precision(.fractionLength(0))) }

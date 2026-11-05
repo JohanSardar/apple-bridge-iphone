@@ -4,12 +4,6 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-struct CommandPacket: Decodable {
-    let ephemeral_key: Data
-    let box: Data
-    let signature: Data
-}
-
 struct PhoneResult: Codable {
     let command_id: String
     let request_hash: String
@@ -67,13 +61,7 @@ final class PushDelivery {
 
     private func open(_ packet: CommandPacket, identity: DeviceIdentity) throws -> PhoneJob {
         guard let gateway = identity.gatewayKey, let id = identity.deviceID else { throw IdentityError.invalidCode }
-        let message = Data("apple-bridge-iphone-command/1\0".utf8) + packet.ephemeral_key + packet.box
-        guard try Curve25519.Signing.PublicKey(rawRepresentation: gateway).isValidSignature(packet.signature, for: message) else { throw IdentityError.requestFailed }
-        let key = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identity.encryption)
-        let secret = try key.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: packet.ephemeral_key))
-        let symmetric = secret.hkdfDerivedSymmetricKey(using: SHA256.self, salt: Data("apple-bridge-iphone/1".utf8), sharedInfo: Data(id.utf8), outputByteCount: 32)
-        let plain = try AES.GCM.open(AES.GCM.SealedBox(combined: packet.box), using: symmetric)
-        return try JSONDecoder().decode(PhoneJob.self, from: plain)
+        return try JSONDecoder().decode(PhoneJob.self, from: packet.open(gatewayKey: gateway, encryption: identity.encryption, deviceID: id))
     }
 
     func drain() async {
@@ -91,6 +79,7 @@ final class PushDelivery {
             var identity = try DeviceIdentity.load()
             guard identity.deviceID != nil else { status = "Pairing required"; return }
             if identity.gatewayKey == nil {
+                guard PairingClient.allowsGatewayKeyFetch(remote: identity.remote) else { status = "Pair again"; return }
                 let data = try await PairingClient.signedRequest(identity: identity, path: "/v1/iphone/status")
                 identity.gatewayKey = try JSONDecoder().decode(PairedDevice.self, from: data).gateway_key
                 try identity.save()
@@ -116,7 +105,7 @@ final class PushDelivery {
                     try save(cache)
                 }
             }
-            let raw = try await PairingClient.signedRequest(identity: identity, path: "/v1/iphone/pending")
+            let raw = try await PairingClient.signedRequest(identity: identity, path: "/v1/iphone/pending", payload: Data(#"{"live_state":true}"#.utf8))
             let packets = try JSONDecoder().decode([CommandPacket].self, from: raw)
             for packet in packets {
                 let job = try open(packet, identity: identity)
