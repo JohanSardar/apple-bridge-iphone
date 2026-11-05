@@ -28,7 +28,7 @@ struct PairCode: Decodable {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let expiry = formatter.date(from: result.expires_at) ?? ISO8601DateFormatter().date(from: result.expires_at)
-        guard let url = URL(string: result.address), url.scheme == "https", url.host != nil, url.user == nil, url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/", result.purpose == "iphone", result.secret.count == 20, result.fingerprint.count == 64, result.gateway_key?.count == 32, let expiry, expiry > Date() else { throw IdentityError.invalidCode }
+        guard let url = URL(string: result.address), url.scheme == "https", url.host != nil, url.user == nil, url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/", result.purpose == "iphone", result.secret.count == 20, result.fingerprint.count == 64, result.gateway_key?.count == 32 || (result.gateway_key == nil && result.remote != true), let expiry, expiry > Date() else { throw IdentityError.invalidCode }
         return result
     }
 }
@@ -58,7 +58,11 @@ final class GatewayTLS: NSObject, URLSessionDelegate, @unchecked Sendable {
 
 struct PairingClient {
     static func verifiedGatewayKey(code: PairCode, result: PairedDevice, signing: Data, encryption: Data) throws -> Data {
-        guard let committed = code.gateway_key, let returned = result.gateway_key, committed == returned, let proof = result.pair_proof else { throw IdentityError.requestFailed }
+        guard let committed = code.gateway_key else {
+            guard code.remote != true, let pinned = result.gateway_key, pinned.count == 32 else { throw IdentityError.requestFailed }
+            return pinned
+        }
+        guard let returned = result.gateway_key, committed == returned, let proof = result.pair_proof else { throw IdentityError.requestFailed }
         let message = pairResponseMessage(pairingID: code.id, address: code.address, deviceID: result.id, signing: signing, encryption: encryption, gatewayKey: committed)
         guard HMAC<SHA256>.isValidAuthenticationCode(proof, authenticating: message, using: SymmetricKey(data: Data(SHA256.hash(data: code.secret)))) else { throw IdentityError.requestFailed }
         return committed

@@ -48,7 +48,14 @@ struct PairingProof {
 
         var older = raw
         older["gateway_key"] = nil
-        checks["code_without_key_is_refused"] = (try? PairCode.decode(try encode(older))) == nil
+        checks["remote_code_without_key_is_refused"] = (try? PairCode.decode(try encode(older))) == nil
+        older["remote"] = false
+        let pinnedCode = try? PairCode.decode(try encode(older))
+        checks["pinned_code_without_key_still_decodes"] = pinnedCode != nil
+        if let pinnedCode {
+            checks["pinned_code_takes_the_key_over_the_pinned_channel"] = accepts(pinnedCode, PairedDevice(id: device, gateway_key: gateway, pair_proof: nil), signing: signing, encryption: encryption)
+            checks["pinned_code_refuses_a_missing_key"] = !accepts(pinnedCode, PairedDevice(id: device, gateway_key: nil, pair_proof: nil), signing: signing, encryption: encryption)
+        }
         var short = raw
         short["gateway_key"] = Data([1, 2, 3]).base64EncodedString()
         checks["code_with_a_short_key_is_refused"] = (try? PairCode.decode(try encode(short))) == nil
