@@ -1,6 +1,6 @@
 # Apple Bridge for iPhone
 
-The native iPhone companion for [Apple Bridge on Mac](https://github.com/JohanSardar/apple-bridge). This repository owns the app, capabilities, pairing client, encrypted delivery client, widgets, extensions, iOS builds and TestFlight tooling. It builds without the Mac repository, Go, Node or pnpm.
+The native iPhone companion for [Apple Bridge on Mac](https://github.com/eilmer-si/apple-bridge). This repository owns the app, capabilities, pairing client, encrypted delivery client, widgets, extensions, iOS builds and TestFlight tooling. It builds without the Mac repository, Go, Node or pnpm.
 
 ## Build and check
 
@@ -26,7 +26,7 @@ Cross-repository scenarios remain in the Mac repository because they start its r
 APPLE_BRIDGE_IPHONE_ROOT=/path/to/apple-bridge-iphone ~/bin/ab-local go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-SHELL-SIM.yaml --level sim
 ```
 
-The gateway's [feature graph](https://github.com/JohanSardar/apple-bridge/blob/main/features.yaml) tracks these integrated journeys. [Physical qualification history](docs/real-qualification.md) records earlier measurements and limitations; moving repositories does not qualify new hardware behavior.
+The gateway's [feature graph](https://github.com/eilmer-si/apple-bridge/blob/main/features.yaml) tracks these integrated journeys. [Physical qualification history](docs/real-qualification.md) records earlier measurements and limitations; moving repositories does not qualify new hardware behavior.
 
 ## TestFlight
 
