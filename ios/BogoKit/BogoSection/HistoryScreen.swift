@@ -73,11 +73,15 @@ struct ActivityRow: View {
     let record: RequestRecord
     let approver: PhoneApprover
     let ended: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let history = Formatting.history(record)
         let review = record.request.map(Review.init)
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xs)) : AnyLayout(HStackLayout(alignment: .center, spacing: Space.s))
         HStack(alignment: .center, spacing: Space.s) {
+            layout {
             VStack(alignment: .leading, spacing: 3) {
                 Text(review.map { Formatting.visible(Formatting.title($0)) } ?? AttributedString("Unreadable request"))
                     .type(.callout, weight: .medium)
@@ -88,8 +92,8 @@ struct ActivityRow: View {
                     .foregroundStyle(Ink.secondary)
                     .lineLimit(2)
             }
-            Spacer(minLength: Space.s)
-            VStack(alignment: .trailing, spacing: 3) {
+            if !stacked { Spacer(minLength: Space.s) }
+            VStack(alignment: stacked ? .leading : .trailing, spacing: 3) {
                 if let review, let price = review.price, case .money(let amount, _) = price.value {
                     Text(amount.formatted)
                         .type(.callout, weight: .medium)
@@ -101,6 +105,8 @@ struct ActivityRow: View {
                     .foregroundStyle(Ink.tertiary)
             }
             .fixedSize()
+            }
+            Spacer(minLength: 0)
             Chevron()
         }
         .padding(.vertical, Space.m)

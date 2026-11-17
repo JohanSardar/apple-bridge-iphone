@@ -86,8 +86,8 @@ struct HomeScreen: View {
                             Hairline()
                         }
                     }
-                } else if stale.isEmpty {
-                    EmptyHome(connected: connected, addMac: addMac)
+                } else if stale.isEmpty && !connected {
+                    EmptyHome(addMac: addMac)
                         .transition(.opacity)
                 }
                 if !ended.isEmpty {
@@ -165,7 +165,7 @@ struct HomeHeader: View {
 
     private var subhead: String {
         if waiting > 0 { return "Nothing runs until you approve." }
-        return "Nothing is waiting for you."
+        return "When an agent wants to spend money or act for you, it asks here first."
     }
 }
 
@@ -196,17 +196,21 @@ struct MacStatusLink: View {
 struct PendingRow: View {
     let entry: InboxEntry
     let approver: PhoneApprover
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let record = entry.primary
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xs)) : AnyLayout(HStackLayout(alignment: .center, spacing: Space.s))
         HStack(alignment: .center, spacing: Space.s) {
+            layout {
             if let request = record.request {
                 let review = Review(request)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Formatting.visible(Formatting.title(review)))
                         .type(.headline)
                         .foregroundStyle(Ink.primary)
-                        .lineLimit(2)
+                        .lineLimit(stacked ? 4 : 2)
                         .multilineTextAlignment(.leading)
                     Text(byline(request, record))
                         .type(.label)
@@ -218,8 +222,8 @@ struct PendingRow: View {
                             .foregroundStyle(Ink.warning)
                     }
                 }
-                Spacer(minLength: Space.s)
-                VStack(alignment: .trailing, spacing: 3) {
+                if !stacked { Spacer(minLength: Space.s) }
+                VStack(alignment: stacked ? .leading : .trailing, spacing: 3) {
                     if let price = review.price, case .money(let amount, _) = price.value {
                         Text(amount.formatted).type(.headline).monospacedDigit().foregroundStyle(Ink.primary)
                     }
@@ -238,8 +242,9 @@ struct PendingRow: View {
                     Text("Unreadable request").type(.headline).foregroundStyle(Ink.primary)
                     Text((approver.mac(record.bogoID)?.name ?? "Unknown Mac") + " · can’t be approved").type(.label).foregroundStyle(Ink.secondary)
                 }
-                Spacer(minLength: Space.s)
             }
+            }
+            Spacer(minLength: 0)
             Chevron()
         }
         .padding(.vertical, Space.m)
@@ -256,27 +261,19 @@ struct PendingRow: View {
 }
 
 struct EmptyHome: View {
-    let connected: Bool
     let addMac: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l) {
-            if connected {
-                Text("When an agent wants to spend money or act for you, it asks here first.")
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Connect your Mac").type(.title).foregroundStyle(Ink.primary).accessibilityAddTraits(.isHeader)
+                Text(AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
                     .type(.body)
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Connect your Mac").type(.title).foregroundStyle(Ink.primary).accessibilityAddTraits(.isHeader)
-                    Text(AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
-                        .type(.body)
-                        .foregroundStyle(Ink.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Button("Add Mac", action: addMac)
-                    .buttonStyle(PrimaryButtonStyle())
             }
+            Button("Add Mac", action: addMac)
+                .buttonStyle(PrimaryButtonStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -94,7 +94,7 @@ struct ReviewScreen: View {
                     .opacity(arrived ? 1 : 0)
                 } else {
                     UnreadableSection(record: record, macName: approver.mac(record.bogoID)?.name)
-                    Hairline().padding(.vertical, Space.xl)
+                    Hairline().padding(.top, Space.xl)
                     AllDetailsRow(count: nil) { details = true }
                 }
             }
