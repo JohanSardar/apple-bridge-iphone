@@ -114,6 +114,17 @@ public final class StandInMacLink: MacLink {
         log(line)
     }
 
+    public static var quiet: Bool {
+        get { UserDefaults.standard.bool(forKey: "BogoDemoQuiet") }
+        set { UserDefaults.standard.set(newValue, forKey: "BogoDemoQuiet") }
+    }
+
+    public var connected: Bool { mac != nil }
+
+    public func demo(_ request: DemoRequest) {
+        run(["demo": request.rawValue])
+    }
+
     public func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] {
         guard !macs.contains(where: { $0.bogoID == bogoID && $0.state == .active }) else { return [] }
         return [RegistrationOffer(id: Self.offerID, label: Self.macName, opened: Date().addingTimeInterval(-12))]
@@ -132,6 +143,7 @@ public final class StandInMacLink: MacLink {
         latest = [:]
         save()
         _ = receive?(bogoID, nil, .boot(bootSeq: bootSeq, bootID: bootID))
+        guard !Self.quiet else { return }
         Task {
             for step in Self.script {
                 try? await Task.sleep(for: .milliseconds(step.afterMs))
@@ -149,6 +161,12 @@ public final class StandInMacLink: MacLink {
             latest[name] = deliver(delivered, reqID: RequestBytes.decode(delivered)?.nonce)
             save()
         }
+        if let name = command["demo"] as? String, let demo = DemoRequest(rawValue: name) {
+            let session = vectors["payment-approved"].flatMap { RequestBytes.decode($0)?.session } ?? Data(repeating: 0, count: 48)
+            let nonce = nextNonce()
+            latest[name] = deliver(demo.bytes(bogoID: bogoID, session: session, nonce: nonce, nowMs: UInt64(Date().timeIntervalSince1970 * 1000)), reqID: nonce)
+            save()
+        }
         if let name = command["reject"] as? String, let bytes = rejects[name] {
             deliver(bytes, reqID: nil)
         }
@@ -164,7 +182,9 @@ public final class StandInMacLink: MacLink {
         if let name = command["outcome"] as? String, let reqID = nonce(name) {
             _ = receive?(bogoID, nil, .outcome(reqID: reqID, outcome: Outcome(rawValue: command["is"] as? String ?? "") ?? .unknown))
         }
-        if let agent = command["unpause"] as? String, let agentID = vectors.values.compactMap({ RequestBytes.decode($0) }).first(where: { $0.agentName == agent })?.agentID {
+        if let agent = command["unpause"] as? String,
+           let agentID = vectors.values.compactMap({ RequestBytes.decode($0) }).first(where: { $0.agentName == agent })?.agentID
+            ?? DemoRequest.allCases.map(\.shape).first(where: { $0.agentName == agent })?.agentID {
             epochs[agentID, default: 1] += 1
             save()
         }
