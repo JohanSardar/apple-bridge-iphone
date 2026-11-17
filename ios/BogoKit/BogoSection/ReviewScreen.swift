@@ -201,7 +201,6 @@ struct ApprovedSummary: Equatable {
 }
 
 
-/// Title, who asked, the picture, the merchant and the price: everything sits on the page, nothing boxed.
 struct ReviewSummary: View {
     let review: Review
     let received: UInt64
@@ -282,7 +281,6 @@ struct PriceView: View {
     }
 }
 
-/// The agent's reason as plain text: a grey label, its words, any mismatch warning, and a footnote that BOGO didn't check it.
 struct ReasonSection: View {
     let review: Review
 
@@ -414,7 +412,6 @@ enum ArgumentCount {
     }
 }
 
-/// What happened to a request that's no longer waiting, as one line of colored text.
 struct StatusLine: View {
     let text: String
     let mark: Formatting.Mark

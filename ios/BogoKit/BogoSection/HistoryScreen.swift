@@ -68,7 +68,6 @@ struct HistoryScreen: View {
     }
 }
 
-/// One decision, like a line on a statement: what it was and what happened on the left, the amount and time on the right.
 struct ActivityRow: View {
     let record: RequestRecord
     let approver: PhoneApprover

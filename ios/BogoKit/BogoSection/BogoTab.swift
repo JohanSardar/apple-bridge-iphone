@@ -169,7 +169,6 @@ struct HomeHeader: View {
     }
 }
 
-/// The Macs entry in the top corner: the connected Mac's name, plain text.
 struct MacStatusLink: View {
     let macs: [MacRecord]
 
@@ -192,7 +191,6 @@ struct MacStatusLink: View {
     }
 }
 
-/// A waiting request as a statement row: what it is and who asked on the left, the amount and time left on the right.
 struct PendingRow: View {
     let entry: InboxEntry
     let approver: PhoneApprover

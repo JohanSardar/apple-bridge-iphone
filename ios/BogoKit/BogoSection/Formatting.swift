@@ -65,12 +65,10 @@ enum Formatting {
         }
     }
 
-    /// "Stripe · Create spend request": the upstream as a name and the action in words. The raw identifiers stay in All details.
     static func action(_ review: Review) -> AttributedString {
         visible(service(review.request.upstream)) + AttributedString(" · ") + visible(humanize(review.action ?? review.request.tool))
     }
 
-    /// The card's title: the `title` role as the agent sent it, or else the action in words.
     static func title(_ review: Review) -> String {
         review.titleFromRole ? review.title : humanize(review.title)
     }
@@ -82,7 +80,6 @@ enum Formatting {
         return spoken.prefix(1).uppercased() + spoken.dropFirst()
     }
 
-    /// "spend-request_create" → "Create spend request", "send_email" → "Send email".
     static func humanize(_ identifier: String) -> String {
         var parts = words(identifier).split(separator: " ").map(String.init)
         guard !parts.isEmpty else { return identifier }

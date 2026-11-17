@@ -310,7 +310,6 @@ public struct Hairline: View {
     }
 }
 
-/// A section's name, in sentence case: "Details", "Today", "Macs".
 public struct SectionHeader: View {
     let text: String
 
@@ -327,7 +326,6 @@ public struct SectionHeader: View {
     }
 }
 
-/// A small grey label above a block of text, such as "Reason".
 public struct FieldLabel: View {
     let text: String
 
@@ -343,7 +341,6 @@ public struct FieldLabel: View {
     }
 }
 
-/// A titled group of rows on the page itself: no card, a hairline under the header and between rows.
 public struct RowSection<Content: View>: View {
     let title: String?
     let content: Content
@@ -389,7 +386,6 @@ public struct DestructiveButtonStyle: ButtonStyle {
     }
 }
 
-/// A check that draws itself inside a thin ring: the one success mark, used after Approve and Add Mac.
 public struct DoneMark: View {
     var size: CGFloat = 88
     @State private var ring: CGFloat = 0

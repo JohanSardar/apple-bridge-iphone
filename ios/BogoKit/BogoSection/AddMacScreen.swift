@@ -258,7 +258,6 @@ struct AddMacScreen: View {
     }
 }
 
-/// The 6-digit pairing code in large tabular figures, split 3 + 3.
 struct CodeTiles: View {
     let code: String
 

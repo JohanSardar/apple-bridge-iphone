@@ -118,8 +118,6 @@ final class PictureGuard: NSObject, URLSessionTaskDelegate, Sendable {
     }
 }
 
-/// The agent's picture, fitted whole and sitting straight on the page: no frame, no well, no badge.
-/// Its provenance is a plain "Image · From the agent" row in the details; tapping it shows the exact link.
 struct HeroPicture: View {
     let link: String
     @State private var pictures = Pictures.shared
