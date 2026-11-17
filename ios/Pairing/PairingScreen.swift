@@ -19,20 +19,23 @@ struct PairingScreen: View {
 
     var body: some View {
         Form {
-            LabeledContent("Status", value: state.status)
-            Section("Pair with your Mac") {
-                TextField("Pairing code", text: $code, axis: .vertical)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .privacySensitive()
-                Button("Pair") { Task { await state.pair(code); code = "" } }
-                    .disabled(code.isEmpty || state.busy)
-                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                    Button("Scan gateway QR") { scanning = true }
+            Group {
+                LabeledContent("Status", value: state.status)
+                Section("Pair with your Mac") {
+                    TextField("Pairing code", text: $code, axis: .vertical)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .privacySensitive()
+                    Button("Pair") { Task { await state.pair(code); code = "" } }
+                        .disabled(code.isEmpty || state.busy)
+                    if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                        Button("Scan gateway QR") { scanning = true }
+                    }
                 }
+                Button("Check connection") { Task { await state.check() } }
+                Text("Revoke this iPhone from the Mac with the gateway revoke command.")
             }
-            Button("Check connection") { Task { await state.check() } }
-            Text("Revoke this iPhone from the Mac with the gateway revoke command.")
+            .listRowBackground(Ink.canvas)
         }
         .bogoList()
         .navigationTitle("Pairing")
