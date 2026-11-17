@@ -286,6 +286,10 @@ public final class PhoneApprover {
         try await link.register(offer)
     }
 
+    public func beginRegistration(code: String) async throws -> RegistrationChannel {
+        try await link.register(code: code)
+    }
+
     public func completeRegistration(_ channel: RegistrationChannel, confirmation: MacConfirmation) async throws -> MacRecord {
         guard let store else { throw StoreError.sqlite("unavailable") }
         let account = Hex.string(confirmation.bogoID) + "." + UUID().uuidString

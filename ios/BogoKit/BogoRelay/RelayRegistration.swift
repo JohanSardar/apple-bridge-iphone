@@ -14,6 +14,7 @@ enum RegWire {
     static let refused: UInt8 = 0x08
     static let macAbort: UInt8 = 0x09
     static let phoneAbort: UInt8 = 0x0a
+    static let macOffer: UInt8 = 0x0b
 
     static func sha(_ parts: Data...) -> Data {
         Data(SHA256.hash(data: parts.reduce(Data(), +)))
@@ -27,10 +28,6 @@ enum RegWire {
 
     static func commitment(ePubM: Data, ePubP: Data, nM: Data) -> Data {
         sha(tag("bogo-reg-commit"), ePubM, ePubP, nM)
-    }
-
-    static func code(ePubM: Data, ePubP: Data, nM: Data, nP: Data) -> String {
-        Registration.code(sha(tag("bogo-reg-code"), ePubM, ePubP, nM, nP))
     }
 
     static func transcriptHash(offer: Data, ePubM: Data, ePubP: Data, commit: Data, nM: Data, nP: Data) -> Data {
@@ -63,6 +60,22 @@ enum RegWire {
         return try? ChaChaPoly.open(box, using: key, authenticating: aad(offer: offer, phase: phase))
     }
 
+    static func roomAAD(room: Data, phase: UInt8) -> Data {
+        tag("bogo-pair/v1") + room + Data([phase])
+    }
+
+    static func sealRoom(_ payload: Data, key: SymmetricKey, room: Data, phase: UInt8) throws -> Data {
+        let box = try ChaChaPoly.seal(payload, using: key, nonce: nonce(phase), authenticating: roomAAD(room: room, phase: phase))
+        return Data([phase]) + box.ciphertext + box.tag
+    }
+
+    static func openRoom(_ body: Data, key: SymmetricKey, room: Data) -> (phase: UInt8, payload: Data)? {
+        guard let phase = body.first, body.count >= 17,
+              let box = try? ChaChaPoly.SealedBox(nonce: nonce(phase), ciphertext: body.dropFirst().dropLast(16), tag: body.suffix(16)),
+              let payload = try? ChaChaPoly.open(box, using: key, authenticating: roomAAD(room: room, phase: phase)) else { return nil }
+        return (phase, payload)
+    }
+
     static func random(_ count: Int) -> Data {
         var bytes = Data(count: count)
         _ = bytes.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!) }
@@ -74,12 +87,59 @@ enum RegWire {
     }
 }
 
+public struct PairCode: Equatable, Sendable {
+    public let secret: Data
+    public let relay: String?
+
+    static let alphabet = Array("abcdefghijkmnpqrstuvwxyz23456789".utf8)
+
+    public init?(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = trimmed.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
+        let code = parts[0].lowercased()
+        guard code.hasPrefix("bogo1-") else { return nil }
+        var bits: UInt32 = 0
+        var count = 0
+        var secret = Data()
+        for c in code.dropFirst(6).utf8 where c != UInt8(ascii: "-") && c != UInt8(ascii: " ") {
+            guard let value = Self.alphabet.firstIndex(of: c) else { return nil }
+            bits = (bits << 5) | UInt32(value)
+            count += 5
+            if count >= 8 {
+                count -= 8
+                secret.append(UInt8(truncatingIfNeeded: bits >> UInt32(count)))
+            }
+        }
+        guard secret.count == 15 else { return nil }
+        var relay: String?
+        if parts.count == 2 {
+            var host = parts[1].trimmingCharacters(in: .whitespaces).lowercased()
+            if host.hasSuffix(":443") { host.removeLast(4) }
+            guard !host.isEmpty, host.rangeOfCharacter(from: CharacterSet(charactersIn: "/@?# ")) == nil,
+                  URL(string: "https://" + host)?.host() != nil else { return nil }
+            relay = host
+        }
+        self.secret = secret
+        self.relay = relay
+    }
+
+    var room: Data { RegWire.sha(RegWire.tag("bogo-pair-room/v1"), secret).prefix(16) }
+
+    var roomKey: SymmetricKey {
+        HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), salt: Data(), info: RegWire.tag("bogo-pair-key/v1"), outputByteCount: 32)
+    }
+
+    func endpoint(publicRelay: RelayEndpoint) -> RelayEndpoint {
+        relay.flatMap { URL(string: "https://" + $0) }.map(RelayEndpoint.init) ?? publicRelay
+    }
+}
+
 @MainActor
 final class RelayRegistration: RegistrationChannel {
-    let code: String
+    let code: String? = nil
     private let client: RelayClient
     private let keys: ChannelKeys
-    private let offer: Data
+    private let room: Room
     private let transcriptHash: Data
     private let key: SymmetricKey
     private var confirmed: (macE2E: Data, macRelay: Data, bogoID: Data)?
@@ -88,45 +148,51 @@ final class RelayRegistration: RegistrationChannel {
 
     static let poll: Duration = .milliseconds(300)
 
-    static func begin(client: RelayClient, keys: ChannelKeys, offer: LobbyOffer) async throws -> RelayRegistration {
-        let ephemeral = Curve25519.KeyAgreement.PrivateKey()
-        let ePubP = ephemeral.publicKey.rawRepresentation
-        try await send(client, offer.offerID, RegWire.hello, ePubP)
-        let commit = try await wait(client, offer.offerID, for: [RegWire.commit]).payload
-        guard commit.count == 32 else { throw RegistrationError.tampered }
-        let nP = RegWire.random(16)
-        try await send(client, offer.offerID, RegWire.phoneNonce, nP)
-        let nM = try await wait(client, offer.offerID, for: [RegWire.reveal]).payload
-        guard nM.count == 16, RegWire.commitment(ePubM: offer.ePubM, ePubP: ePubP, nM: nM) == commit else {
-            try? await send(client, offer.offerID, RegWire.phoneAbort, Data())
-            throw RegistrationError.tampered
-        }
-        let macKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: offer.ePubM)
-        let shared = try ephemeral.sharedSecretFromKeyAgreement(with: macKey).withUnsafeBytes { Data($0) }
-        guard shared.contains(where: { $0 != 0 }) else {
-            try? await send(client, offer.offerID, RegWire.phoneAbort, Data())
-            throw RegistrationError.tampered
-        }
-        let th = RegWire.transcriptHash(offer: offer.offerID, ePubM: offer.ePubM, ePubP: ePubP, commit: commit, nM: nM, nP: nP)
-        return RelayRegistration(client: client, keys: keys, offer: offer.offerID, transcriptHash: th,
-                                 key: RegWire.phaseKey(shared: shared, transcriptHash: th),
-                                 code: RegWire.code(ePubM: offer.ePubM, ePubP: ePubP, nM: nM, nP: nP))
+    struct Room {
+        let id: Data
+        let key: SymmetricKey
     }
 
-    private init(client: RelayClient, keys: ChannelKeys, offer: Data, transcriptHash: Data, key: SymmetricKey, code: String) {
+    static func begin(client: RelayClient, keys: ChannelKeys, code: PairCode) async throws -> RelayRegistration {
+        let room = Room(id: code.room, key: code.roomKey)
+        let ePubM = try await wait(client, room, for: [RegWire.macOffer], timeout: .seconds(10), closed: .noMac).payload
+        guard ePubM.count == 32 else { throw RegistrationError.tampered }
+        let ephemeral = Curve25519.KeyAgreement.PrivateKey()
+        let ePubP = ephemeral.publicKey.rawRepresentation
+        try await send(client, room, RegWire.hello, ePubP)
+        let commit = try await wait(client, room, for: [RegWire.commit]).payload
+        guard commit.count == 32 else { throw RegistrationError.tampered }
+        let nP = RegWire.random(16)
+        try await send(client, room, RegWire.phoneNonce, nP)
+        let nM = try await wait(client, room, for: [RegWire.reveal]).payload
+        guard nM.count == 16, RegWire.commitment(ePubM: ePubM, ePubP: ePubP, nM: nM) == commit else {
+            try? await send(client, room, RegWire.phoneAbort, Data())
+            throw RegistrationError.tampered
+        }
+        let macKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: ePubM)
+        let shared = try ephemeral.sharedSecretFromKeyAgreement(with: macKey).withUnsafeBytes { Data($0) }
+        guard shared.contains(where: { $0 != 0 }) else {
+            try? await send(client, room, RegWire.phoneAbort, Data())
+            throw RegistrationError.tampered
+        }
+        let th = RegWire.transcriptHash(offer: room.id, ePubM: ePubM, ePubP: ePubP, commit: commit, nM: nM, nP: nP)
+        return RelayRegistration(client: client, keys: keys, room: room, transcriptHash: th,
+                                 key: RegWire.phaseKey(shared: shared, transcriptHash: th))
+    }
+
+    private init(client: RelayClient, keys: ChannelKeys, room: Room, transcriptHash: Data, key: SymmetricKey) {
         self.client = client
         self.keys = keys
-        self.offer = offer
+        self.room = room
         self.transcriptHash = transcriptHash
         self.key = key
-        self.code = code
     }
 
     var txID: Data { RegWire.txID(transcriptHash) }
 
     func macConfirmation() async throws -> MacConfirmation {
-        let sealed = try await Self.wait(client, offer, for: [RegWire.macConfirmed], until: { [weak self] in self?.aborted ?? true }).payload
-        guard let plain = RegWire.open(sealed, key: key, offer: offer, phase: RegWire.macConfirmed), let fields = RegWire.json(plain),
+        let sealed = try await Self.wait(client, room, for: [RegWire.macConfirmed], until: { [weak self] in self?.aborted ?? true }).payload
+        guard let plain = RegWire.open(sealed, key: key, offer: room.id, phase: RegWire.macConfirmed), let fields = RegWire.json(plain),
               let macE2E = (fields["macE2e"] as? String).flatMap(Hex.data), macE2E.count == 32,
               let macRelay = (fields["macRelay"] as? String).flatMap(Hex.data), macRelay.count == 32,
               let bogoID = (fields["bogoId"] as? String).flatMap(Hex.data), bogoID == RegWire.sha(macE2E),
@@ -149,7 +215,8 @@ final class RelayRegistration: RegistrationChannel {
         guard let confirmed else { throw RegistrationError.macCancelled }
         let account = Hex.string(confirmed.bogoID) + "." + Hex.string(txID.prefix(8))
         try keys.save(account: account)
-        let route = MacRoute(macE2E: confirmed.macE2E, macMailbox: RelayClient.mailbox(confirmed.macRelay), txID: txID, channelAccount: account)
+        let route = MacRoute(macE2E: confirmed.macE2E, macMailbox: RelayClient.mailbox(confirmed.macRelay), txID: txID, channelAccount: account,
+                             relayURL: client.endpoint.url)
         return (route, RegWire.approverID(txID))
     }
 
@@ -165,15 +232,15 @@ final class RelayRegistration: RegistrationChannel {
             "encodingVersions": [1],
         ]
         let plain = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
-        let sealed = try RegWire.seal(plain, key: key, offer: offer, phase: RegWire.regSubmit)
+        let sealed = try RegWire.seal(plain, key: key, offer: room.id, phase: RegWire.regSubmit)
         do {
-            try await Self.send(client, offer, RegWire.regSubmit, sealed)
-            let answer = try await Self.wait(client, offer, for: [RegWire.registered, RegWire.refused], timeout: .seconds(90), closed: .unanswered)
+            try await Self.send(client, room, RegWire.regSubmit, sealed)
+            let answer = try await Self.wait(client, room, for: [RegWire.registered, RegWire.refused], timeout: .seconds(90), closed: .unanswered)
             if answer.phase == RegWire.refused {
-                let why = RegWire.open(answer.payload, key: key, offer: offer, phase: RegWire.refused).flatMap(RegWire.json)?["why"] as? String
+                let why = RegWire.open(answer.payload, key: key, offer: room.id, phase: RegWire.refused).flatMap(RegWire.json)?["why"] as? String
                 throw RegistrationError.refused(why ?? "")
             }
-            guard let opened = RegWire.open(answer.payload, key: key, offer: offer, phase: RegWire.registered), let reply = RegWire.json(opened),
+            guard let opened = RegWire.open(answer.payload, key: key, offer: room.id, phase: RegWire.registered), let reply = RegWire.json(opened),
                   let tx = (reply["txId"] as? String).flatMap(Hex.data), let approver = (reply["approverId"] as? String).flatMap(Hex.data),
                   tx == txID, approver == RegWire.approverID(txID) else { throw RegistrationError.unanswered }
             return Registered(txID: tx, approverID: approver)
@@ -189,15 +256,16 @@ final class RelayRegistration: RegistrationChannel {
     func abort() {
         guard !aborted else { return }
         aborted = true
-        let (client, offer) = (client, offer)
-        Task { try? await Self.send(client, offer, RegWire.phoneAbort, Data()) }
+        let (client, room) = (client, room)
+        Task { try? await Self.send(client, room, RegWire.phoneAbort, Data()) }
     }
 
-    private static func send(_ client: RelayClient, _ offer: Data, _ phase: UInt8, _ payload: Data) async throws {
-        try await client.lobbySend(offer: offer, msgID: RegWire.msgID(offer: offer, phase: phase), body: Data([phase]) + payload)
+    private static func send(_ client: RelayClient, _ room: Room, _ phase: UInt8, _ payload: Data) async throws {
+        try await client.roomSend(room.id, msgID: RegWire.msgID(offer: room.id, phase: phase),
+                                  body: RegWire.sealRoom(payload, key: room.key, room: room.id, phase: phase))
     }
 
-    private static func wait(_ client: RelayClient, _ offer: Data, for phases: Set<UInt8>, timeout: Duration = .seconds(600),
+    private static func wait(_ client: RelayClient, _ room: Room, for phases: Set<UInt8>, timeout: Duration = .seconds(600),
                              closed: RegistrationError = .macCancelled,
                              until cancelled: @MainActor () -> Bool = { false }) async throws -> (phase: UInt8, payload: Data) {
         let deadline = ContinuousClock.now + timeout
@@ -205,7 +273,7 @@ final class RelayRegistration: RegistrationChannel {
             if cancelled() || Task.isCancelled { throw RegistrationError.macCancelled }
             let messages: [RelayMessage]
             do {
-                messages = try await client.lobbyFetch(offer: offer)
+                messages = try await client.roomFetch(room.id)
             } catch RelayError.status(404), RelayError.status(403) {
                 throw closed
             } catch {
@@ -213,12 +281,13 @@ final class RelayRegistration: RegistrationChannel {
                 continue
             }
             for message in messages {
-                guard let phase = message.body.first, message.msgID == Hex.string(RegWire.msgID(offer: offer, phase: phase)) else { continue }
+                guard let (phase, payload) = RegWire.openRoom(message.body, key: room.key, room: room.id),
+                      message.msgID == Hex.string(RegWire.msgID(offer: room.id, phase: phase)) else { continue }
                 if phase == RegWire.macAbort { throw RegistrationError.macCancelled }
-                if phases.contains(phase) { return (phase, Data(message.body.dropFirst())) }
+                if phases.contains(phase) { return (phase, payload) }
             }
             try await Task.sleep(for: poll)
         }
-        throw RegistrationError.unanswered
+        throw closed == .noMac ? .noMac : RegistrationError.unanswered
     }
 }

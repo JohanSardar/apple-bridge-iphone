@@ -192,12 +192,14 @@ public struct MacRoute: Equatable, Sendable {
     public let macMailbox: String
     public let txID: Data
     public let channelAccount: String
+    public let relayURL: URL?
 
-    public init(macE2E: Data, macMailbox: String, txID: Data, channelAccount: String) {
+    public init(macE2E: Data, macMailbox: String, txID: Data, channelAccount: String, relayURL: URL?) {
         self.macE2E = macE2E
         self.macMailbox = macMailbox
         self.txID = txID
         self.channelAccount = channelAccount
+        self.relayURL = relayURL
     }
 }
 
@@ -259,6 +261,8 @@ public enum Registration {
 }
 
 public enum RegistrationError: Error, Equatable {
+    case badCode
+    case noMac
     case macCancelled
     case refused(String)
     case tampered
@@ -267,7 +271,7 @@ public enum RegistrationError: Error, Equatable {
 
 @MainActor
 public protocol RegistrationChannel: AnyObject {
-    var code: String { get }
+    var code: String? { get }
     func macConfirmation() async throws -> MacConfirmation
     func clientDataHash(approvalKey: Data) -> Data
     func saveRoute() throws -> (route: MacRoute, approverID: Data)?
@@ -285,4 +289,11 @@ public protocol MacLink: AnyObject {
     func send(_ message: PhoneMessage, sealed: Data, msgID: Data, to mac: MacRecord) async throws
     func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer]
     func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel
+    func register(code: String) async throws -> RegistrationChannel
+}
+
+public extension MacLink {
+    func register(code: String) async throws -> RegistrationChannel {
+        throw RegistrationError.badCode
+    }
 }
