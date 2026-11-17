@@ -1,37 +1,122 @@
 # Apple Bridge for iPhone
 
-The native iPhone companion for [Apple Bridge on Mac](https://github.com/JohanSardar/apple-bridge). This repository owns the app, capabilities, pairing client, encrypted delivery client, widgets, extensions, iOS builds and TestFlight tooling. It builds without the Mac repository, Go, Node or pnpm.
+**The iPhone app for [Apple Bridge](https://github.com/JohanSardar/apple-bridge) and [BOGO](https://github.com/JohanSardar/bogo).**
+
+[![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-join_the_beta-0D96F6?logo=apple&logoColor=white)](https://testflight.apple.com/join/dQu75bv1)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+This repo is one iPhone app with two jobs:
+
+- **Apple Bridge.** It is the iPhone companion to Apple Bridge on your Mac. It
+  lets the agents you connect to Apple Bridge use your iPhone's
+  notifications, alarms, location, Health data and more, each only after you
+  turn it on.
+- **BOGO.** Its **BOGO tab** approves AI agents' tool calls for the
+  [BOGO daemon](https://github.com/JohanSardar/bogo) on your Mac. When an
+  agent asks to run a protected tool, the BOGO tab shows the exact call on the
+  Review card, and nothing runs until you slide to approve and confirm with
+  Face ID. [See it work](https://github.com/JohanSardar/bogo#see-it-work).
+
+The two share the app and its design, and nothing else: BOGO uses no Apple
+Bridge server, relay, pairing or key.
+
+> **Status: early.** The [TestFlight link](https://testflight.apple.com/join/dQu75bv1)
+> admits testers only once Apple's Beta App Review passes the first build,
+> which it hasn't yet; until then, build the app from source. The BOGO tab
+> works in the iOS Simulator; a session on a real iPhone has not been recorded
+> yet. BOGO's
+> [What is verified](https://github.com/JohanSardar/bogo/blob/main/docs/status.md)
+> page lists what has been checked.
+
+## Which repo do I want?
+
+| Repo | What it is | Go there to |
+|---|---|---|
+| [JohanSardar/bogo](https://github.com/JohanSardar/bogo) | **BOGO**: the Mac daemon, CLI, shim and relay that put approval in front of an AI agent's MCP tools, plus the spec, proofs and docs | run BOGO, connect an agent, read how it works, report a BOGO bug |
+| [JohanSardar/apple-bridge-iphone](https://github.com/JohanSardar/apple-bridge-iphone) | **Apple Bridge iPhone app**: Apple Bridge's iPhone companion, which also carries the BOGO tab, BOGO's iPhone approver | build or test the iPhone app, report a bug in the app |
+| [JohanSardar/apple-bridge](https://github.com/JohanSardar/apple-bridge) | **Apple Bridge** for Mac: gives agents your Mac's Messages, Mail, Calendar and more through one local MCP server. Separate from BOGO | use Apple Bridge on your Mac |
+
+BOGO and Apple Bridge are separate products that share only the iPhone app.
+BOGO uses no Apple Bridge server, relay or key. Words like approver, relay and
+Review card are defined once in the [glossary](https://github.com/JohanSardar/bogo/blob/main/GLOSSARY.md).
 
 ## Build and check
 
-Use Xcode 26.4+ and XcodeGen (`brew install xcodegen`). From this repository:
+Use Xcode 26.4 or later and XcodeGen (`brew install xcodegen`). From this
+repo's root:
 
 ```sh
-make simulator
+make simulator   # build the app and its extensions for the Simulator, unsigned
 make lint
 make test
 ```
 
-`make simulator` builds the app and extensions without signing. `make test` compiles and executes eleven production Swift models with fake adapters, then runs the existing release and harness tests. These checks run locally without an iPhone, permission prompts, personal data or gateway. On the Air, run each step through `~/bin/ab-local`; it supplies the compatible Mac SDK for the model checks. Full app builds require Xcode.
+`make test` runs the app's Swift models with fake adapters, and the release and
+lab tests. None of these needs an iPhone, a permission prompt, personal data or
+the Mac gateway. Generated projects, build products, provisioning profiles and
+credentials stay out of git.
 
-For a signed device build, configure the existing private development profiles described in [the app guide](ios/README.md), then run `make build`. Installation remains explicit through `packaging/dev/install-ios.sh`. Generated projects, app products, provisioning profiles and credentials stay outside git. Bundle IDs and signing settings are unchanged.
+[The app guide](ios/README.md) covers signed device builds, each capability,
+pairing and delivery. The [design rules](docs/design.md) cover how every screen
+looks.
 
-## Gateway connection
+## What's in this repo
 
-The Mac gateway owns `/v1/iphone/*`, command admission, the ledger, signed record ingestion and relay/APNs delivery. This app owns local execution, permissions, device keys and receipts. Pairing and the wire format are unchanged. Neither repository imports the other's source to build its product.
+| Path | What |
+|---|---|
+| [`ios/App`](ios/App) | The app shell: tabs, settings and the capability registry |
+| [`ios/Capabilities`](ios/Capabilities) | One folder per Apple Bridge capability: alarms, notifications, location, Health, motion, Screen Time and more |
+| [`ios/Pairing`](ios/Pairing), [`ios/Delivery`](ios/Delivery) | Apple Bridge pairing with the Mac, and encrypted command delivery |
+| [`ios/BridgeWidgets`](ios/BridgeWidgets), [`ios/Extensions`](ios/Extensions), [`ios/AlarmActivity`](ios/AlarmActivity) | Widgets, the alarm Live Activity and the Screen Time extensions |
+| [`ios/BogoKit`](ios/BogoKit) | The BOGO tab: `BogoModel` decodes BOGO's request bytes into the Review card, `BogoCrypto` holds the Face ID approval key and App Attest, `BogoRelay` talks to BOGO through its relay, and `BogoSection` is the screens |
+| [`packaging/`](packaging) | Build, lint, model-check and TestFlight scripts |
+| [`lab/`](lab) | Proof programs and real-device harnesses |
+| [`docs/`](docs/README.md) | Design rules and device qualification records |
 
-Cross-repository scenarios remain in the Mac repository because they start its real gateway. Clone both repositories, then run there with `APPLE_BRIDGE_IPHONE_ROOT` pointing to this checkout:
+## Apple Bridge gateway
+
+The Mac gateway owns `/v1/iphone/*`, command admission, the ledger, signed
+record ingestion and relay and APNs delivery. This app owns local execution,
+permissions, device keys and receipts. Neither repo imports the other's source
+to build.
+
+Scenarios that span both repos live in the Mac repo, because they start its
+real gateway. Clone both, then run from the Mac repo with
+`APPLE_BRIDGE_IPHONE_ROOT` pointing at this checkout:
 
 ```sh
-APPLE_BRIDGE_IPHONE_ROOT=/path/to/apple-bridge-iphone ~/bin/ab-local go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-SHELL-SIM.yaml --level sim
+APPLE_BRIDGE_IPHONE_ROOT=/path/to/apple-bridge-iphone go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-SHELL-SIM.yaml --level sim
 ```
 
-The gateway's [feature graph](https://github.com/JohanSardar/apple-bridge/blob/main/features.yaml) tracks these integrated journeys. [Physical qualification history](docs/real-qualification.md) records earlier measurements and limitations; moving repositories does not qualify new hardware behavior.
+The gateway's [feature graph](https://github.com/JohanSardar/apple-bridge/blob/main/features.yaml)
+tracks these journeys. [Real iPhone qualification](docs/real-qualification.md)
+records earlier device measurements and their limits.
 
-## TestFlight
+## Releases
 
-[docs/release.md](docs/release.md) lists the release steps from `main` to the public TestFlight link: archive and upload with `packaging/release/testflight.py --external --upload`, then put the build in the public group and submit it for Beta App Review with `packaging/release/testflight_public.py --submit`. Both scripts read the private release settings, which stay outside git.
+Builds go to the public [TestFlight link](https://testflight.apple.com/join/dQu75bv1).
+[docs/release.md](docs/release.md) lists the steps from `main` to that link:
+archive and upload with `packaging/release/testflight.py --external --upload`,
+then add the build to the public group and submit it for Beta App Review with
+`packaging/release/testflight_public.py --submit`. Both scripts read private
+release settings that stay outside git.
 
-A Mac running BOGO needs `"production"` in `approvers.iphone.app_attest` to pair with a TestFlight build, because TestFlight builds use App Attest's production environment.
+A TestFlight build uses App Attest's production environment, so the BOGO
+daemon it pairs with must list `"production"` in `approvers.iphone.app_attest`. See BOGO's
+[configuration](https://github.com/JohanSardar/bogo/blob/main/docs/configuration.md).
 
-Imported from `JohanSardar/apple-bridge` at `030ebf5e00c25389205f91f682fb3e3f834e3b12`, retaining the filtered history of the app and moved tooling. The original license and engineering principles are included.
+## Bugs, security and contributing
+
+- **Bugs in the BOGO tab** go to [BOGO's issues](https://github.com/JohanSardar/bogo/issues/new/choose),
+  with the rest of BOGO. **Other app bugs** go to
+  [this repo's issues](https://github.com/JohanSardar/apple-bridge-iphone/issues/new/choose).
+- **Vulnerabilities:** report them privately, as [SECURITY.md](SECURITY.md)
+  says. Never in a public issue.
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Changes:** see [CHANGELOG.md](CHANGELOG.md).
+
+## License and history
+
+[MIT](LICENSE). Imported from `JohanSardar/apple-bridge` at
+`030ebf5e00c25389205f91f682fb3e3f834e3b12`, keeping the filtered history of the
+app and its tooling. The [engineering principles](PRINCIPLES.md) came with it.
