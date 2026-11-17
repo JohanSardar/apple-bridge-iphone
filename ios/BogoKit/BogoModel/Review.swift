@@ -8,11 +8,16 @@ public struct Review: Sendable {
         case missing
     }
 
+    public enum Role: Equatable, Sendable {
+        case title, subtitle, image
+    }
+
     public struct Highlight: Identifiable, Equatable, Sendable {
         public let id: Int
         public let path: [PathElement]
         public let label: String
         public let value: Highlighted
+        public var role: Role? = nil
     }
 
     public enum Container: Equatable, Sendable {
@@ -60,12 +65,18 @@ public struct Review: Sendable {
         for (index, hint) in request.hints.enumerated() {
             let label = Review.label(hint.path)
             guard let value = request.value(at: hint.path) else {
-                highlights.append(Highlight(id: index, path: hint.path, label: label, value: .missing))
+                highlights.append(Highlight(id: index, path: hint.path, label: label, value: .missing, role: Review.role(hint.format)))
                 continue
             }
             switch hint.format {
-            case .text, .title, .subtitle, .image:
+            case .text:
                 highlights.append(Highlight(id: index, path: hint.path, label: label, value: .text(value)))
+            case .title:
+                highlights.append(Highlight(id: index, path: hint.path, label: label, value: .text(value), role: .title))
+            case .subtitle:
+                highlights.append(Highlight(id: index, path: hint.path, label: label, value: .text(value), role: .subtitle))
+            case .image:
+                highlights.append(Highlight(id: index, path: hint.path, label: label, value: .text(value), role: .image))
             case .moneyMinor(let currency):
                 if case .number(let token) = value, let amount = MoneyAmount.minor(token, currency: currency) {
                     money.append(amount)
@@ -93,6 +104,72 @@ public struct Review: Sendable {
         var pictures: [String] = []
         for link in rows.compactMap(\.picture) where !pictures.contains(link) { pictures.append(link) }
         self.pictures = pictures
+    }
+
+    public var title: String {
+        roleHighlight(.title).flatMap(Review.roleText) ?? action ?? request.tool
+    }
+
+    public var titleFromRole: Bool { roleHighlight(.title) != nil }
+
+    public var subtitle: String? { roleHighlight(.subtitle).flatMap(Review.roleText) }
+
+    public var image: String? {
+        guard case .text(.string(let link))? = imageHighlight?.value else { return pictures.first }
+        return link
+    }
+
+    public var imageFromRole: Bool { imageHighlight != nil }
+
+    public var price: Highlight? {
+        highlights.first { highlight in
+            switch highlight.value {
+            case .money, .unformattable: return true
+            case .text, .missing: return false
+            }
+        }
+    }
+
+    public var details: [Highlight] {
+        let shown = Set([roleHighlight(.title), roleHighlight(.subtitle), imageHighlight].compactMap { $0?.id })
+        return highlights.filter { highlight in
+            guard !shown.contains(highlight.id), !(action != nil && highlight.path == [.key("name")]) else { return false }
+            if case .text = highlight.value { return true }
+            return false
+        }
+    }
+
+    public var missing: [Highlight] {
+        highlights.filter { $0.value == .missing }
+    }
+
+    private func roleHighlight(_ role: Role) -> Highlight? {
+        highlights.first { $0.role == role && Review.roleText($0) != nil }
+    }
+
+    private var imageHighlight: Highlight? {
+        highlights.first { highlight in
+            guard highlight.role == .image, case .text(.string(let link)) = highlight.value else { return false }
+            return Review.isLink(link)
+        }
+    }
+
+    private static func roleText(_ highlight: Highlight) -> String? {
+        guard case .text(let value) = highlight.value else { return nil }
+        switch value {
+        case .string(let text) where !text.isEmpty: return text
+        case .number(let text): return text
+        default: return nil
+        }
+    }
+
+    private static func role(_ format: DisplayFormat) -> Role? {
+        switch format {
+        case .title: return .title
+        case .subtitle: return .subtitle
+        case .image: return .image
+        case .text, .moneyMinor: return nil
+        }
     }
 
     private static func action(_ request: ApprovalRequest) -> String? {
