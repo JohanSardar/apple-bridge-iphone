@@ -216,3 +216,5 @@ struct DemoControls: View {
 #Preview {
     BridgeSettings()
 }
+
+let ciMustFail: Int = "not a number"

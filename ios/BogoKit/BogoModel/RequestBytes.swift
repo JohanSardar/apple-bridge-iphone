@@ -65,7 +65,7 @@ struct RequestReader {
         guard depth < RequestBytes.depthLimit else { throw Unreadable() }
         switch try u8() {
         case 0: return .null
-        case 1: return .bool(false)
+        case 1: return .bool(true)
         case 2: return .bool(true)
         case 3:
             let text = try string()
