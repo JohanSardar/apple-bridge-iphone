@@ -47,71 +47,69 @@ struct HomeScreen: View {
         let connected = approver.macs.contains { $0.state == .active }
         let recent = Array(Inbox.history(approver.shown).prefix(3))
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 HomeHeader(approver: approver, waiting: live.count)
-                ForEach(stale) { mac in
-                    Button(action: addMac) {
-                        HStack(spacing: Space.m) {
-                            Tile(symbol: "faceid", size: 44, tint: Ink.claim, wash: Ink.claimWash)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Add \(mac.name) again").type(.headline).foregroundStyle(Ink.primary)
-                                Text("Face ID changed, so approvals from this iPhone stopped working.")
-                                    .type(.label)
-                                    .foregroundStyle(Ink.secondary)
-                                    .multilineTextAlignment(.leading)
+                if !stale.isEmpty {
+                    VStack(spacing: 0) {
+                        Hairline()
+                        ForEach(stale) { mac in
+                            Button(action: addMac) {
+                                HStack(spacing: Space.s) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Add \(mac.name) again").type(.headline).foregroundStyle(Ink.primary)
+                                        Text("Face ID changed, so approvals from this iPhone stopped working.")
+                                            .type(.label)
+                                            .foregroundStyle(Ink.warning)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Chevron()
+                                }
+                                .padding(.vertical, Space.m)
+                                .contentShape(Rectangle())
                             }
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.tertiary)
+                            .buttonStyle(.plain)
+                            Hairline()
                         }
-                        .card(padding: Space.m)
                     }
-                    .buttonStyle(PressableStyle())
                 }
                 if !live.isEmpty {
-                    VStack(spacing: Space.m) {
+                    VStack(spacing: 0) {
+                        Hairline()
                         ForEach(live) { entry in
                             Button { section.reviewing = entry.primary.id } label: {
-                                PendingCard(entry: entry, approver: approver, prominent: entry.id == live.first?.id)
+                                PendingRow(entry: entry, approver: approver)
                             }
-                            .buttonStyle(PressableStyle())
+                            .buttonStyle(.plain)
                             .matchedTransitionSource(id: entry.primary.id, in: zoom)
-                            .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.96))))
+                            .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+                            Hairline()
                         }
                     }
-                } else if stale.isEmpty {
-                    EmptyHome(connected: connected, addMac: addMac)
+                } else if stale.isEmpty && !connected {
+                    EmptyHome(addMac: addMac)
                         .transition(.opacity)
                 }
                 if !ended.isEmpty {
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Eyebrow("Ended")
-                        VStack(spacing: 0) {
-                            ForEach(Array(ended.enumerated()), id: \.element.id) { index, entry in
-                                if index > 0 { Hairline().padding(.leading, 60) }
-                                Button { section.reviewing = entry.primary.id } label: {
-                                    ActivityRow(record: entry.primary, approver: approver, ended: true)
-                                }
-                                .buttonStyle(.plain)
+                    RowSection("Ended") {
+                        ForEach(Array(ended.enumerated()), id: \.element.id) { index, entry in
+                            if index > 0 { Hairline() }
+                            Button { section.reviewing = entry.primary.id } label: {
+                                ActivityRow(record: entry.primary, approver: approver, ended: true)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, Space.m)
-                        .card(padding: 0, radius: Radius.inner + 4)
                     }
                 }
                 if !recent.isEmpty {
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Eyebrow("Recent")
-                        VStack(spacing: 0) {
-                            ForEach(Array(recent.enumerated()), id: \.element.id) { index, record in
-                                if index > 0 { Hairline().padding(.leading, 60) }
-                                Button { section.reviewing = record.id } label: {
-                                    ActivityRow(record: record, approver: approver, ended: false)
-                                }
-                                .buttonStyle(.plain)
+                    RowSection("Recent") {
+                        ForEach(Array(recent.enumerated()), id: \.element.id) { index, record in
+                            if index > 0 { Hairline() }
+                            Button { section.reviewing = record.id } label: {
+                                ActivityRow(record: record, approver: approver, ended: false)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, Space.m)
-                        .card(padding: 0, radius: Radius.inner + 4)
                     }
                 }
             }
@@ -135,30 +133,25 @@ struct HomeHeader: View {
     let waiting: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            HStack(alignment: .center) {
-                HStack(spacing: Space.xs) {
-                    BogoMark(size: 26)
-                    Text("BOGO").type(.headline).tracking(1.2).foregroundStyle(Ink.primary)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("BOGO")
+        VStack(alignment: .leading, spacing: Space.xl) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("BOGO").type(.headline).foregroundStyle(Ink.primary)
                 Spacer()
-                NavigationLink(value: MacsRoute()) { MacChip(macs: approver.macs) }
-                    .buttonStyle(PressableStyle())
+                NavigationLink(value: MacsRoute()) { MacStatusLink(macs: approver.macs) }
+                    .buttonStyle(.plain)
             }
             if waiting > 0 || approver.macs.contains(where: { $0.state == .active }) {
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(headline)
-                    .type(.title)
-                    .foregroundStyle(Ink.primary)
-                    .contentTransition(.numericText())
-                    .accessibilityAddTraits(.isHeader)
-                Text(subhead).type(.callout).foregroundStyle(Ink.secondary)
-            }
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(headline)
+                        .type(.title)
+                        .foregroundStyle(Ink.primary)
+                        .contentTransition(.numericText())
+                        .accessibilityAddTraits(.isHeader)
+                    Text(subhead).type(.callout).foregroundStyle(Ink.secondary)
+                }
             }
         }
-        .padding(.top, Space.xs)
+        .padding(.top, Space.s)
         .animation(Motion.standard, value: waiting)
     }
 
@@ -172,29 +165,24 @@ struct HomeHeader: View {
 
     private var subhead: String {
         if waiting > 0 { return "Nothing runs until you approve." }
-        return approver.macs.contains { $0.state == .active } ? "Nothing is waiting for you." : "Connect a Mac to get started."
+        return "When an agent wants to spend money or act for you, it asks here first."
     }
 }
 
-struct MacChip: View {
+struct MacStatusLink: View {
     let macs: [MacRecord]
 
     var body: some View {
         let active = macs.filter { $0.state == .active }
-        HStack(spacing: 7) {
-            if active.isEmpty {
-                Image(systemName: "laptopcomputer").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.secondary)
-            } else {
-                StatusDot(Ink.positive)
-            }
-            Text(label(active)).type(.label, weight: .medium).foregroundStyle(Ink.primary).lineLimit(1)
-            Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Ink.tertiary)
+        HStack(spacing: 6) {
+            Text(label(active)).type(.callout).foregroundStyle(Ink.secondary).lineLimit(1)
+            Chevron()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Ink.surface, in: Capsule())
-        .overlay(Capsule().strokeBorder(Ink.hairline, lineWidth: 0.75))
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(active.isEmpty ? "Macs, none connected" : "Macs, \(label(active)) connected")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func label(_ active: [MacRecord]) -> String {
@@ -203,159 +191,88 @@ struct MacChip: View {
     }
 }
 
-struct PendingCard: View {
+struct PendingRow: View {
     let entry: InboxEntry
     let approver: PhoneApprover
-    var prominent = true
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let record = entry.primary
-        VStack(alignment: .leading, spacing: Space.m) {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xs)) : AnyLayout(HStackLayout(alignment: .center, spacing: Space.s))
+        HStack(alignment: .center, spacing: Space.s) {
+            layout {
             if let request = record.request {
                 let review = Review(request)
-                HStack(spacing: Space.xs) {
-                    Monogram(request.agentName, size: 20)
-                    Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(2).layoutPriority(1)
-                    Text("· " + Formatting.ago(record.receivedMs)).type(.label).foregroundStyle(Ink.tertiary).lineLimit(1)
-                    Spacer(minLength: Space.xs)
-                    if entry.count > 1 {
-                        Text("×\(entry.count)")
-                            .type(.caption, weight: .semibold)
-                            .monospacedDigit()
-                            .foregroundStyle(Ink.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Ink.raised, in: Capsule())
-                            .accessibilityLabel("\(entry.count) identical requests")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Formatting.visible(Formatting.title(review)))
+                        .type(.headline)
+                        .foregroundStyle(Ink.primary)
+                        .lineLimit(stacked ? 4 : 2)
+                        .multilineTextAlignment(.leading)
+                    Text(byline(request, record))
+                        .type(.label)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(2)
+                    if !review.warnings.isEmpty {
+                        Text("Amount differs from the reason")
+                            .type(.label, weight: .medium)
+                            .foregroundStyle(Ink.warning)
+                    }
+                }
+                if !stacked { Spacer(minLength: Space.s) }
+                VStack(alignment: stacked ? .leading : .trailing, spacing: 3) {
+                    if let price = review.price, case .money(let amount, _) = price.value {
+                        Text(amount.formatted).type(.headline).monospacedDigit().foregroundStyle(Ink.primary)
                     }
                     if let expires = request.expires {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
-                            Label(Formatting.remaining(expires, now: context.date), systemImage: "timer")
-                                .type(.caption, weight: .semibold)
+                            Text(Formatting.remaining(expires, now: context.date) + " left")
+                                .type(.label)
                                 .monospacedDigit()
-                                .foregroundStyle(Ink.claim)
+                                .foregroundStyle(Ink.tertiary)
                         }
                     }
                 }
-                HStack(alignment: .center, spacing: Space.m) {
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(Formatting.visible(review.title))
-                            .type(.headline)
-                            .foregroundStyle(Ink.primary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        Text(review.subtitle.map { Formatting.visible($0) } ?? Formatting.via(review))
-                            .type(.label)
-                            .foregroundStyle(Ink.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    if let image = review.image {
-                        PictureThumb(link: image, size: 76)
-                    } else {
-                        Tile(symbol: Formatting.symbol(review), size: 52)
-                    }
-                }
-                if !review.warnings.isEmpty {
-                    Label("Reason mentions a different amount", systemImage: "exclamationmark.triangle.fill")
-                        .type(.caption, weight: .semibold)
-                        .foregroundStyle(Ink.claim)
-                }
+                .fixedSize()
             } else {
-                HStack(spacing: Space.m) {
-                    Tile(symbol: "exclamationmark.triangle.fill", size: 52, tint: Ink.claim, wash: Ink.claimWash)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Unreadable request").type(.headline).foregroundStyle(Ink.primary)
-                        Text((approver.mac(record.bogoID)?.name ?? "Unknown Mac") + " · can’t be approved").type(.label).foregroundStyle(Ink.secondary)
-                    }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Unreadable request").type(.headline).foregroundStyle(Ink.primary)
+                    Text((approver.mac(record.bogoID)?.name ?? "Unknown Mac") + " · can’t be approved").type(.label).foregroundStyle(Ink.secondary)
                 }
             }
-            HStack(alignment: .center) {
-                if let price = record.request.flatMap({ Review($0).price }), case .money(let amount, _) = price.value {
-                    let parts = PriceView.split(amount)
-                    Text("\(Text(parts.main))\(Text(parts.minor).foregroundStyle(Ink.secondary))")
-                        .type(.title2)
-                        .monospacedDigit()
-                        .foregroundStyle(Ink.primary)
-                } else if let facts = record.request.map({ PendingCard.facts(Review($0)) }), !facts.isEmpty {
-                    Text(facts)
-                        .type(.label, weight: .medium)
-                        .foregroundStyle(Ink.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: Space.s)
-                HStack(spacing: 6) {
-                    Text("Review").type(.label, weight: .semibold)
-                    Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold))
-                }
-                .foregroundStyle(prominent ? Ink.inverse : Ink.primary)
-                .padding(.horizontal, 16)
-                .frame(height: 36)
-                .background(prominent ? Ink.primary : Ink.raised, in: Capsule())
-                .accessibilityHidden(true)
             }
+            Spacer(minLength: 0)
+            Chevron()
         }
-        .card()
-        .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .padding(.vertical, Space.m)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens the request to approve or deny")
     }
 
-    static func facts(_ review: Review) -> String {
-        review.details.prefix(2).compactMap { highlight -> String? in
-            switch highlight.value {
-            case .text(.string(let text)) where !text.isEmpty && !text.contains("\n"): return text
-            case .text(.number(let text)): return text
-            default: return nil
-            }
-        }.joined(separator: " · ")
+    private func byline(_ request: ApprovalRequest, _ record: RequestRecord) -> AttributedString {
+        var line = Formatting.visible(request.agentName) + AttributedString(" · " + Formatting.ago(record.receivedMs))
+        if entry.count > 1 { line += AttributedString(" · \(entry.count) identical") }
+        return line
     }
 }
 
 struct EmptyHome: View {
-    let connected: Bool
     let addMac: () -> Void
-    @State private var breathe = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: Space.xl) {
-            ZStack {
-                ForEach(0..<3) { ring in
-                    Circle()
-                        .strokeBorder(Ink.primary.opacity(0.06 - Double(ring) * 0.015), lineWidth: 1)
-                        .frame(width: 96 + CGFloat(ring) * 52, height: 96 + CGFloat(ring) * 52)
-                        .scaleEffect(breathe ? 1.03 : 0.98)
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 3.2).repeatForever().delay(Double(ring) * 0.3), value: breathe)
-                }
-                Circle().fill(Ink.surface).frame(width: 88, height: 88).shadow(color: Ink.shadow, radius: 14, y: 6)
-                Image(systemName: connected ? "checkmark.shield" : "laptopcomputer.and.iphone")
-                    .font(.system(size: 30, weight: .regular))
-                    .foregroundStyle(Ink.primary)
-            }
-            .frame(height: 210)
-            .accessibilityHidden(true)
-            VStack(spacing: Space.xs) {
-                if !connected {
-                    Text("Connect your Mac")
-                        .type(.title2)
-                        .foregroundStyle(Ink.primary)
-                }
-                Text(connected ? AttributedString("When an agent wants to spend money or act for you, it asks here first.")
-                     : AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
-                    .type(.callout)
+        VStack(alignment: .leading, spacing: Space.l) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Connect your Mac").type(.title).foregroundStyle(Ink.primary).accessibilityAddTraits(.isHeader)
+                Text(AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
+                    .type(.body)
                     .foregroundStyle(Ink.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 300)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if !connected {
-                Button("Add Mac", action: addMac)
-                    .buttonStyle(PrimaryButtonStyle())
-                    .frame(maxWidth: 240)
-            }
+            Button("Add Mac", action: addMac)
+                .buttonStyle(PrimaryButtonStyle())
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Space.xxl)
-        .onAppear { breathe = true }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

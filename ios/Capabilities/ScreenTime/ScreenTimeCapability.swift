@@ -69,36 +69,39 @@ struct ScreenTimeScreen: View {
 
     var body: some View {
         Form {
-            Toggle("Enabled", isOn: $enabled)
-            Text(status)
-            Button("Authorize Screen Time") {
-                Task {
-                    do {
-                        try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
-                        status = "Authorized"
-                    } catch { status = "Authorization unavailable" }
+            Group {
+                Toggle("Enabled", isOn: $enabled)
+                Text(status)
+                Button("Authorize Screen Time") {
+                    Task {
+                        do {
+                            try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                            status = "Authorized"
+                        } catch { status = "Authorization unavailable" }
+                    }
                 }
-            }
-            Button("Choose apps, categories and websites") { picker = true }
-            Button("Shield selection") { perform { try ScreenTimeCapability.authorized(); ScreenTimeState.apply(ScreenTimeState.manual) } }
-            Button("Remove Bridge shields") { perform { ScreenTimeState.manual.clearAllSettings() } }
-            DatePicker("Downtime start", selection: $start, displayedComponents: .hourAndMinute)
-            DatePicker("Downtime end", selection: $end, displayedComponents: .hourAndMinute)
-            Button("Schedule Bridge downtime") {
-                perform {
-                    try ScreenTimeCapability.authorized()
-                    let calendar = Calendar.current
-                    try ScreenTimeCapability.schedule(start: calendar.component(.hour, from: start) * 60 + calendar.component(.minute, from: start), end: calendar.component(.hour, from: end) * 60 + calendar.component(.minute, from: end))
+                Button("Choose apps, categories and websites") { picker = true }
+                Button("Shield selection") { perform { try ScreenTimeCapability.authorized(); ScreenTimeState.apply(ScreenTimeState.manual) } }
+                Button("Remove Bridge shields") { perform { ScreenTimeState.manual.clearAllSettings() } }
+                DatePicker("Downtime start", selection: $start, displayedComponents: .hourAndMinute)
+                DatePicker("Downtime end", selection: $end, displayedComponents: .hourAndMinute)
+                Button("Schedule Bridge downtime") {
+                    perform {
+                        try ScreenTimeCapability.authorized()
+                        let calendar = Calendar.current
+                        try ScreenTimeCapability.schedule(start: calendar.component(.hour, from: start) * 60 + calendar.component(.minute, from: start), end: calendar.component(.hour, from: end) * 60 + calendar.component(.minute, from: end))
+                    }
                 }
+                Button("Cancel Bridge downtime") {
+                    DeviceActivityCenter().stopMonitoring([.init("bridge.downtime")])
+                    ScreenTimeState.downtime.clearAllSettings()
+                }
+                NavigationLink("App and website usage") {
+                    DeviceActivityReport(.init("bridge.usage"), filter: DeviceActivityFilter(segment: .daily(during: Calendar.current.dateInterval(of: .day, for: Date())!), users: .all, devices: .init([.iPhone])))
+                }
+                Text("Only Bridge shields and schedules are changed. Usage stays in this report.")
             }
-            Button("Cancel Bridge downtime") {
-                DeviceActivityCenter().stopMonitoring([.init("bridge.downtime")])
-                ScreenTimeState.downtime.clearAllSettings()
-            }
-            NavigationLink("App and website usage") {
-                DeviceActivityReport(.init("bridge.usage"), filter: DeviceActivityFilter(segment: .daily(during: Calendar.current.dateInterval(of: .day, for: Date())!), users: .all, devices: .init([.iPhone])))
-            }
-            Text("Only Bridge shields and schedules are changed. Usage stays in this report.")
+            .listRowBackground(Ink.canvas)
         }
         .bogoList()
         .navigationTitle("Screen Time")

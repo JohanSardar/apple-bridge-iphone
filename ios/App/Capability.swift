@@ -24,35 +24,38 @@ struct CapabilityScreen: View {
 
     var body: some View {
         Form {
-            Section {
-                Toggle("Enabled", isOn: $enabled)
-                    .disabled(!capability.available)
-                    .onChange(of: enabled) { _, value in
-                        if value && capability.id == "notifications" {
-                            Task { try? await NotificationsCapability.requestPermission() }
+            Group {
+                Section {
+                    Toggle("Enabled", isOn: $enabled)
+                        .disabled(!capability.available)
+                        .onChange(of: enabled) { _, value in
+                            if value && capability.id == "notifications" {
+                                Task { try? await NotificationsCapability.requestPermission() }
+                            }
                         }
+                    if capability.id == "location" {
+                        Button("Allow Location") { LocationCapability.adapter.requestPermission() }
+                        Text("Enable Always and Precise Location for geofences and significant changes.")
                     }
-                if capability.id == "location" {
-                    Button("Allow Location") { LocationCapability.adapter.requestPermission() }
-                    Text("Enable Always and Precise Location for geofences and significant changes.")
-                }
-                if capability.id == "healthwrite" {
-                    LabeledContent("Health", value: HealthWriteController.shared.status)
-                    Button("Allow Health write access") { Task { await HealthWriteController.shared.authorize() } }
-                    Button("Test tagged Health write and cleanup") { Task { await HealthWriteController.shared.prove() } }
-                }
-                if capability.id == "healthread" {
-                    LabeledContent("Health", value: HealthReadController.shared.status)
-                    Button("Allow Health read access") { Task { await HealthReadController.shared.enable() } }
-                    Button("Capture Health updates") { Task { await HealthReadController.shared.resume() } }
-                }
-                LabeledContent("Permission", value: capability.permission)
-                LabeledContent("Last activity", value: "None")
-            } footer: {
-                if !capability.available {
-                    Text(capability.permission)
+                    if capability.id == "healthwrite" {
+                        LabeledContent("Health", value: HealthWriteController.shared.status)
+                        Button("Allow Health write access") { Task { await HealthWriteController.shared.authorize() } }
+                        Button("Test tagged Health write and cleanup") { Task { await HealthWriteController.shared.prove() } }
+                    }
+                    if capability.id == "healthread" {
+                        LabeledContent("Health", value: HealthReadController.shared.status)
+                        Button("Allow Health read access") { Task { await HealthReadController.shared.enable() } }
+                        Button("Capture Health updates") { Task { await HealthReadController.shared.resume() } }
+                    }
+                    LabeledContent("Permission", value: capability.permission)
+                    LabeledContent("Last activity", value: "None")
+                } footer: {
+                    if !capability.available {
+                        Text(capability.permission)
+                    }
                 }
             }
+            .listRowBackground(Ink.canvas)
         }
         .bogoList()
         .navigationTitle(capability.title)

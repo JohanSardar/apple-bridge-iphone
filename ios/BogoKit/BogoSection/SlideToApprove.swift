@@ -12,7 +12,7 @@ struct SlideToApprove: View {
     @State private var armProgress: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let height: CGFloat = 66
+    private let height: CGFloat = 60
     private let inset: CGFloat = 5
 
     var body: some View {
@@ -22,8 +22,7 @@ struct SlideToApprove: View {
             let progress = min(1, offset / travel)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(armed || busy ? Ink.primary : Ink.well)
-                    .overlay(Capsule().strokeBorder(Ink.hairline, lineWidth: armed || busy ? 0 : 1))
+                    .fill(armed || busy ? Ink.primary : Ink.raised)
                 Capsule()
                     .fill(Ink.inverse.opacity(0.14 * Double(progress)))
                     .frame(width: knob + inset * 2 + offset)
@@ -64,15 +63,7 @@ struct SlideToApprove: View {
         let text = busy ? "Confirm with Face ID" : armed ? "Slide to approve" : "Read it first"
         Text(text)
             .type(.headline)
-            .foregroundStyle(armed || busy ? Ink.inverse.opacity(0.92) : Ink.secondary)
-            .overlay {
-                if armed && !busy && !reduceMotion {
-                    Text(text)
-                        .type(.headline)
-                        .foregroundStyle(Ink.inverse)
-                        .mask(SheenMask())
-                }
-            }
+            .foregroundStyle(armed || busy ? Ink.inverse : Ink.secondary)
             .contentTransition(.opacity)
             .animation(Motion.fade, value: text)
     }
@@ -80,8 +71,7 @@ struct SlideToApprove: View {
     private func knobView(size: CGFloat) -> some View {
         ZStack {
             Circle()
-                .fill(armed || busy ? Ink.inverse : Ink.surface)
-                .overlay(Circle().strokeBorder(Ink.hairline, lineWidth: armed || busy ? 0 : 1))
+                .fill(armed || busy ? Ink.inverse : Ink.canvas)
             if !armed && !busy {
                 Circle()
                     .trim(from: 0, to: armProgress)
@@ -99,7 +89,6 @@ struct SlideToApprove: View {
             }
         }
         .frame(width: size, height: size)
-        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
     }
 
     private func drag(travel: CGFloat) -> some Gesture {
@@ -140,20 +129,5 @@ struct SlideToApprove: View {
         }
         armProgress = 0
         withAnimation(.linear(duration: max(0.1, armDelay))) { armProgress = 1 }
-    }
-}
-
-private struct SheenMask: View {
-    @State private var phase: CGFloat = -0.6
-
-    var body: some View {
-        GeometryReader { proxy in
-            LinearGradient(colors: [.clear, .white, .clear], startPoint: .leading, endPoint: .trailing)
-                .frame(width: proxy.size.width * 0.45)
-                .offset(x: phase * proxy.size.width)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: false).delay(0.4)) { phase = 1.2 }
-                }
-        }
     }
 }

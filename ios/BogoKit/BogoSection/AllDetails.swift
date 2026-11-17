@@ -10,15 +10,14 @@ struct AllDetails: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Space.xl) {
+                VStack(alignment: .leading, spacing: Space.xxl) {
                     if let request = record.request {
                         let review = Review(request)
                         Text("This is the exact request you sign, every value as the agent sent it.")
                             .type(.callout)
                             .foregroundStyle(Ink.secondary)
-                            .padding(.horizontal, Space.xxs)
-                        section("Will execute (exact)") { WillExecute(review: review) }
-                        section("Agent’s reason (unverified)") { ExactReason(request: request) }
+                        section("Will execute, exactly") { WillExecute(review: review) }
+                        section("Agent’s reason, not verified") { ExactReason(request: request) }
                         section("Request") { RequestFacts(record: record, request: request, macName: macName) }
                         if !request.hints.isEmpty {
                             section("Display hints") { HintList(request: request) }
@@ -46,12 +45,8 @@ struct AllDetails: View {
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Eyebrow(title)
+        RowSection(title) {
             content()
-                .padding(.horizontal, Space.l)
-                .padding(.vertical, Space.xxs)
-                .card(padding: 0, radius: Radius.inner + 4)
         }
     }
 }
@@ -71,8 +66,8 @@ struct WillExecute: View {
             Hairline()
             if let rows = review.arguments {
                 Text("Arguments")
-                    .type(.caption, weight: .semibold)
-                    .foregroundStyle(Ink.tertiary)
+                    .type(.label, weight: .semibold)
+                    .foregroundStyle(Ink.secondary)
                     .padding(.top, Space.m)
                     .padding(.bottom, Space.xxs)
                 if rows.isEmpty {
@@ -118,9 +113,7 @@ struct FoldRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Ink.tertiary)
+                Chevron()
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
             .padding(.vertical, Space.xs)
