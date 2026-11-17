@@ -3,6 +3,7 @@
 **The iPhone app for [Apple Bridge](https://github.com/JohanSardar/apple-bridge) and [BOGO](https://github.com/JohanSardar/bogo).**
 
 [![Join the TestFlight beta](https://img.shields.io/badge/TestFlight-join_the_beta-0D96F6?logo=apple&logoColor=white)](https://testflight.apple.com/join/dQu75bv1)
+[![CI](https://github.com/JohanSardar/apple-bridge-iphone/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JohanSardar/apple-bridge-iphone/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 This repo is one iPhone app with two jobs:
