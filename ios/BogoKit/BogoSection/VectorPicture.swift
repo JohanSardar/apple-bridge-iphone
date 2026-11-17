@@ -29,7 +29,7 @@ enum VectorPicture {
             let cg = context.cgContext
             cg.scaleBy(x: scale, y: scale)
             cg.translateBy(x: -box.minX, y: -box.minY)
-            painter.drawChildren(of: root, in: cg, style: VectorStyle(), depth: 0)
+            painter.draw(root, in: cg, style: VectorStyle(), depth: 0)
         }
         return painter.drewSomething ? image : nil
     }
