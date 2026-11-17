@@ -23,12 +23,13 @@ struct SlideToApprove: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Ink.primary)
                 Capsule()
-                    .fill(Ink.inverse.opacity(0.14))
+                    .fill(Ink.inverse.opacity(0.14 * Double(progress)))
                     .frame(width: knob + inset * 2 + offset)
                 label
                     .frame(maxWidth: .infinity)
-                    .padding(.leading, knob * 0.6)
-                    .opacity(Double(1 - progress * 1.6))
+                    .padding(.leading, busy ? 0 : knob * 0.6)
+                    .padding(.trailing, busy ? knob * 0.9 : 0)
+                    .opacity(busy ? 1 : Double(1 - progress * 1.6))
                 knobView(size: knob)
                     .offset(x: inset + offset)
                     .gesture(drag(travel: travel))
@@ -95,7 +96,7 @@ struct SlideToApprove: View {
             }
         }
         .frame(width: size, height: size)
-        .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
     }
 
     private func drag(travel: CGFloat) -> some Gesture {

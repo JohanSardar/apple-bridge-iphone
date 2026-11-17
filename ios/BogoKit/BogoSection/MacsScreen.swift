@@ -20,7 +20,7 @@ struct MacsScreen: View {
                     VStack(spacing: Space.m) {
                         Tile(symbol: "laptopcomputer", size: 64, tint: Ink.secondary)
                         Text("No Macs yet").type(.title2).foregroundStyle(Ink.primary)
-                        Text("On your Mac, run bogo approver add, then add it here.")
+                        Text(AttributedString("On your Mac, run ") + Formatting.code("bogo approver add") + AttributedString(", then add it here."))
                             .type(.callout)
                             .foregroundStyle(Ink.secondary)
                             .multilineTextAlignment(.center)

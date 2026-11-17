@@ -64,6 +64,7 @@ struct HistoryScreen: View {
         .scrollIndicators(.hidden)
         .canvas()
         .toolbar(.hidden, for: .navigationBar)
+        .statusScrim()
     }
 
     private func summary(_ records: [RequestRecord]) -> String {

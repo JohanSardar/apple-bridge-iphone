@@ -71,7 +71,7 @@ struct HomeScreen: View {
                     VStack(spacing: Space.m) {
                         ForEach(live) { entry in
                             Button { section.reviewing = entry.primary.id } label: {
-                                PendingCard(entry: entry, approver: approver)
+                                PendingCard(entry: entry, approver: approver, prominent: entry.id == live.first?.id)
                             }
                             .buttonStyle(PressableStyle())
                             .matchedTransitionSource(id: entry.primary.id, in: zoom)
@@ -123,6 +123,7 @@ struct HomeScreen: View {
         .canvas()
         .refreshable { await section.sceneBecameActive() }
         .toolbar(.hidden, for: .navigationBar)
+        .statusScrim()
         .onChange(of: live.map(\.id)) { old, new in
             if new.count > old.count { Haptics.soft() }
         }
@@ -146,6 +147,7 @@ struct HomeHeader: View {
                 NavigationLink(value: MacsRoute()) { MacChip(macs: approver.macs) }
                     .buttonStyle(PressableStyle())
             }
+            if waiting > 0 || approver.macs.contains(where: { $0.state == .active }) {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(headline)
                     .type(.title)
@@ -153,6 +155,7 @@ struct HomeHeader: View {
                     .contentTransition(.numericText())
                     .accessibilityAddTraits(.isHeader)
                 Text(subhead).type(.callout).foregroundStyle(Ink.secondary)
+            }
             }
         }
         .padding(.top, Space.xs)
@@ -203,6 +206,7 @@ struct MacChip: View {
 struct PendingCard: View {
     let entry: InboxEntry
     let approver: PhoneApprover
+    var prominent = true
 
     var body: some View {
         let record = entry.primary
@@ -237,7 +241,6 @@ struct PendingCard: View {
                     VStack(alignment: .leading, spacing: Space.xxs) {
                         Text(Formatting.visible(review.title))
                             .type(.headline)
-                            .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Ink.primary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -245,13 +248,6 @@ struct PendingCard: View {
                             .type(.label)
                             .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
-                        if let price = review.price, case .money(let amount, _) = price.value {
-                            Text(amount.formatted)
-                                .type(.title2)
-                                .monospacedDigit()
-                                .foregroundStyle(Ink.primary)
-                                .padding(.top, Space.xxs)
-                        }
                     }
                     Spacer(minLength: 0)
                     if let image = review.image {
@@ -262,7 +258,7 @@ struct PendingCard: View {
                 }
                 if !review.warnings.isEmpty {
                     Label("Reason mentions a different amount", systemImage: "exclamationmark.triangle.fill")
-                        .type(.label, weight: .semibold)
+                        .type(.caption, weight: .semibold)
                         .foregroundStyle(Ink.claim)
                 }
             } else {
@@ -274,15 +270,25 @@ struct PendingCard: View {
                     }
                 }
             }
-            HStack {
-                Text("Review").type(.label, weight: .semibold).foregroundStyle(Ink.inverse)
-                Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Ink.inverse)
+            HStack(alignment: .center) {
+                if let price = record.request.flatMap({ Review($0).price }), case .money(let amount, _) = price.value {
+                    let parts = PriceView.split(amount)
+                    (Text(parts.main) + Text(parts.minor).foregroundColor(Ink.secondary))
+                        .type(.title2)
+                        .monospacedDigit()
+                        .foregroundStyle(Ink.primary)
+                }
+                Spacer(minLength: Space.s)
+                HStack(spacing: 6) {
+                    Text("Review").type(.label, weight: .semibold)
+                    Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold))
+                }
+                .foregroundStyle(prominent ? Ink.inverse : Ink.primary)
+                .padding(.horizontal, 16)
+                .frame(height: 36)
+                .background(prominent ? Ink.primary : Ink.raised, in: Capsule())
+                .accessibilityHidden(true)
             }
-            .padding(.horizontal, 16)
-            .frame(height: 36)
-            .background(Ink.primary, in: Capsule())
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .accessibilityHidden(true)
         }
         .card()
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
@@ -318,8 +324,8 @@ struct EmptyHome: View {
                 Text(connected ? "Nothing needs you" : "Connect your Mac")
                     .type(.title2)
                     .foregroundStyle(Ink.primary)
-                Text(connected ? "When an agent wants to spend money or act for you, it asks here first."
-                     : "Agents on your Mac ask this iPhone before a protected tool runs. Run bogo approver add on the Mac to begin.")
+                Text(connected ? AttributedString("When an agent wants to spend money or act for you, it asks here first.")
+                     : AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
                     .type(.callout)
                     .foregroundStyle(Ink.secondary)
                     .multilineTextAlignment(.center)

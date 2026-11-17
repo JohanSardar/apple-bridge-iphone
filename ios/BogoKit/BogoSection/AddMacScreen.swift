@@ -287,7 +287,7 @@ struct CodeTiles: View {
     var body: some View {
         HStack(spacing: Space.xs) {
             ForEach(Array(code.enumerated()), id: \.offset) { index, digit in
-                if index == 3 { Color.clear.frame(width: Space.xs) }
+                if index == 3 { Color.clear.frame(width: Space.xs, height: 1) }
                 Text(String(digit))
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
                     .monospacedDigit()

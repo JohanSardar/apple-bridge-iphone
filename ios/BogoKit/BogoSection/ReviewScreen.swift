@@ -36,6 +36,7 @@ struct ReviewScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(approved != nil)
+        .toolbar(approved == nil ? .visible : .hidden, for: .navigationBar)
         .onAppear {
             arm()
             withAnimation(Motion.respecting(reduceMotion, Motion.gentle).delay(0.05)) { arrived = true }
@@ -362,7 +363,7 @@ struct DetailsCard: View {
             ForEach(details) { highlight in
                 if case .text(let value) = highlight.value {
                     DetailRow(Text(Formatting.visible(names[highlight.id] ?? highlight.label))) {
-                        Text(Formatting.summary(value)).lineLimit(4)
+                        Text(Formatting.summary(value)).lineLimit(6)
                     }
                     Hairline()
                 }
@@ -532,7 +533,7 @@ struct ApprovedOverlay: View {
                 VStack(spacing: Space.xs) {
                     Text("Approved").type(.title).foregroundStyle(Ink.primary)
                     if let price = summary.price {
-                        Text(price.formatted).type(.title2).monospacedDigit().foregroundStyle(Ink.primary)
+                        Text(price.formatted).type(.title).monospacedDigit().foregroundStyle(Ink.primary)
                     }
                     Text(Formatting.visible(summary.title)).type(.body).foregroundStyle(Ink.secondary).multilineTextAlignment(.center).lineLimit(2)
                     HStack(spacing: 6) {

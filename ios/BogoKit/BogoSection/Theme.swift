@@ -161,13 +161,30 @@ extension View {
         self
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Ink.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(Ink.surface)
+                    .shadow(color: Ink.shadow, radius: 16, x: 0, y: 6)
+            }
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Ink.hairline, lineWidth: 0.75))
-            .shadow(color: Ink.shadow, radius: 18, x: 0, y: 8)
     }
 
     public func canvas() -> some View {
         background(Ink.canvas.ignoresSafeArea())
+    }
+
+    public func statusScrim() -> some View {
+        overlay(alignment: .top) {
+            GeometryReader { proxy in
+                LinearGradient(stops: [.init(color: Ink.canvas, location: 0), .init(color: Ink.canvas.opacity(0.9), location: 0.55),
+                                       .init(color: Ink.canvas.opacity(0), location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: proxy.safeAreaInsets.top + 16)
+                    .offset(y: -proxy.safeAreaInsets.top)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     public func bogoList() -> some View {

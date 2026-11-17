@@ -117,6 +117,7 @@ struct SettingsScreen: View {
         .scrollIndicators(.hidden)
         .canvas()
         .toolbar(.hidden, for: .navigationBar)
+        .statusScrim()
     }
 
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

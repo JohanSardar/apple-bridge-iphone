@@ -138,6 +138,13 @@ enum Formatting {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
+    static func code(_ text: String) -> AttributedString {
+        var code = AttributedString(text)
+        code.font = .system(.callout, design: .monospaced).weight(.medium)
+        code.foregroundColor = Ink.primary
+        return code
+    }
+
     static func ago(_ ms: UInt64, now: Date = Date()) -> String {
         let seconds = max(0, Int(now.timeIntervalSince1970 - TimeInterval(ms) / 1000))
         if seconds < 60 { return "now" }
