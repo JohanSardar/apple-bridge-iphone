@@ -62,7 +62,9 @@ It waits for processing (up to an hour), checks export compliance, and sets the 
 - `whats-new.txt`: What to Test for this build. Update it every release.
 - `review-notes.txt`: the notes for Beta App Review. Reviewers have no Mac running BOGO or the Apple Bridge gateway, so the notes say what the app does and what they can see without one.
 
-Then it makes sure the external group `Public` exists with its public link on and no tester limit, adds the build, and submits the build for Beta App Review. It prints the public link and the review state. Without `--submit` it stops before the review. If a contact field is missing it names the field and submits nothing. Every step is safe to rerun.
+The review notes are saved together with the four contact fields, because App Store Connect refuses notes without them. Then it makes sure the external group `Public` exists with its public link on and no tester limit, adds the build, and submits the build for Beta App Review. It prints the public link and the review state. Without `--submit` it stops before the review. If a contact field is missing it names the field and submits nothing. Every step is safe to rerun.
+
+The public link belongs to the group, so it stays the same across releases: https://testflight.apple.com/join/dQu75bv1. App Store Connect sometimes answers a list request with an empty page although the items exist, and it allows two groups with the same name. The script reads a list several times before it creates anything. If App Store Connect ever shows a second `Public` group, delete the newer one and keep the link above.
 
 The first build of a marketing version waits for Beta App Review, usually a day. Later builds of the same version usually go live without a new review. The public link shows "This beta isn't accepting any new testers right now" until a build in the group is approved.
 

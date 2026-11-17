@@ -36,7 +36,7 @@ def token():
 
 
 def call(method, path, body=None, attempts=6):
-    """App Store Connect answers 500 and 401 now and then for valid requests; retry those."""
+    """App Store Connect answers 500, 401 and 404 now and then for valid requests; retry those."""
     for attempt in range(attempts):
         request = urllib.request.Request(API + path, method=method, data=None if body is None else json.dumps(body).encode(),
                                          headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
@@ -46,7 +46,7 @@ def call(method, path, body=None, attempts=6):
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as error:
             raw = error.read().decode(errors="replace")
-            if error.code in (401, 429, 500, 502, 503, 504) and attempt + 1 < attempts:
+            if error.code in (401, 404, 429, 500, 502, 503, 504) and attempt + 1 < attempts:
                 time.sleep(2 + 3 * attempt)
                 continue
             try:
@@ -82,6 +82,15 @@ def find_build(app, version, build, wait_minutes):
         if time.time() > deadline:
             raise Stop(f"Build {version} ({build}) is not processed yet. Rerun this script later.")
         time.sleep(30)
+
+
+def find(path, match, reads=4):
+    """A list read sometimes comes back empty while the items exist. Look several times before deciding something is missing."""
+    for attempt in range(reads):
+        found = sorted((item for item in call("GET", path)["data"] if match(item["attributes"])), key=lambda item: item["attributes"].get("createdDate") or "")
+        if found or attempt + 1 == reads:
+            return found[0] if found else None
+        time.sleep(5)
 
 
 def upsert(collection, existing, attributes, relationship, owner):
@@ -120,44 +129,44 @@ def main():
             raise Stop("This build was exported internal-only. Export again with testflight.py --external and a new build number.")
         if build["attributes"].get("usesNonExemptEncryption") is not False:
             raise Stop("Export compliance is unanswered. ios/App/Info.plist must keep ITSAppUsesNonExemptEncryption set to false.")
-        print(f"build {args.version} ({args.build}) processed, export compliance answered (no non-exempt encryption)")
+        print(f"build {args.version} ({args.build}) processed, export compliance answered (no non-exempt encryption)", flush=True)
 
         localization = {"description": text("beta-description.txt")}
         if contact.get("feedbackEmail"):
             localization["feedbackEmail"] = contact["feedbackEmail"]
-        existing = [l for l in call("GET", f"/v1/apps/{app}/betaAppLocalizations")["data"] if l["attributes"]["locale"] == LOCALE]
-        upsert("betaAppLocalizations", existing[0] if existing else None, localization, "app", app_ref)
-        existing = [l for l in call("GET", f"/v1/builds/{build['id']}/betaBuildLocalizations")["data"] if l["attributes"]["locale"] == LOCALE]
-        upsert("betaBuildLocalizations", existing[0] if existing else None, {"whatsNew": text("whats-new.txt")}, "build", build_ref)
+        english = lambda attributes: attributes["locale"] == LOCALE
+        upsert("betaAppLocalizations", find(f"/v1/apps/{app}/betaAppLocalizations", english), localization, "app", app_ref)
+        upsert("betaBuildLocalizations", find(f"/v1/builds/{build['id']}/betaBuildLocalizations", english), {"whatsNew": text("whats-new.txt")}, "build", build_ref)
 
-        review = {"notes": text("review-notes.txt"), "demoAccountRequired": False}
-        review.update({k: contact[k] for k in CONTACT_FIELDS if contact.get(k)})
-        call("PATCH", f"/v1/betaAppReviewDetails/{app}", {"data": {"type": "betaAppReviewDetails", "id": app, "attributes": review}})
-        print("test information and review notes set")
+        print("test information set", flush=True)
+        if all(contact.get(k) for k in CONTACT_FIELDS):
+            review = dict({k: contact[k] for k in CONTACT_FIELDS}, notes=text("review-notes.txt"), demoAccountRequired=False)
+            call("PATCH", f"/v1/betaAppReviewDetails/{app}", {"data": {"type": "betaAppReviewDetails", "id": app, "attributes": review}})
+            print("review notes and contact set", flush=True)
+        else:
+            print("review notes not set: App Store Connect saves them only with all four contact fields from --contact", flush=True)
 
         public = {"publicLinkEnabled": True, "publicLinkLimitEnabled": False, "feedbackEnabled": True}
-        groups = [g for g in call("GET", f"/v1/apps/{app}/betaGroups")["data"] if g["attributes"]["name"] == args.group]
-        if groups and groups[0]["attributes"].get("isInternalGroup"):
-            raise Stop(f"Group {args.group} is internal. Choose another --group name.")
-        if groups:
-            group = groups[0]
-            changed = {k: v for k, v in public.items() if group["attributes"].get(k) != v}
-            if changed:
-                group = call("PATCH", f"/v1/betaGroups/{group['id']}", {"data": {"type": "betaGroups", "id": group["id"], "attributes": changed}})["data"]
-        else:
+        group = find(f"/v1/apps/{app}/betaGroups", lambda attributes: attributes["name"] == args.group)
+        if not group:
             group = call("POST", "/v1/betaGroups", {"data": {"type": "betaGroups", "attributes": dict(public, name=args.group),
                                                                "relationships": {"app": {"data": app_ref}}}})["data"]
+        if group["attributes"].get("isInternalGroup"):
+            raise Stop(f"Group {args.group} is internal. Choose another --group name.")
+        changed = {k: v for k, v in public.items() if group["attributes"].get(k) != v}
+        if changed:
+            call("PATCH", f"/v1/betaGroups/{group['id']}", {"data": {"type": "betaGroups", "id": group["id"], "attributes": changed}})
         call("POST", f"/v1/betaGroups/{group['id']}/relationships/builds", {"data": [build_ref]})
         group = call("GET", f"/v1/betaGroups/{group['id']}")["data"]
-        print(f"group {args.group}: external, public link enabled={group['attributes'].get('publicLinkEnabled')}, build added")
-        print(f"public link: {group['attributes'].get('publicLink')}")
+        print(f"group {args.group}: external, public link enabled={group['attributes'].get('publicLinkEnabled')}, build added", flush=True)
+        print(f"public link: {group['attributes'].get('publicLink')}", flush=True)
 
         submission = call("GET", f"/v1/builds/{build['id']}/betaAppReviewSubmission")["data"]
         if not submission and args.submit:
             have = call("GET", f"/v1/apps/{app}/betaAppReviewDetail")["data"]["attributes"]
             missing = [k for k in CONTACT_FIELDS if not have.get(k)]
-            local = [l for l in call("GET", f"/v1/apps/{app}/betaAppLocalizations")["data"] if l["attributes"]["locale"] == LOCALE]
-            if not local or not local[0]["attributes"].get("feedbackEmail"):
+            local = find(f"/v1/apps/{app}/betaAppLocalizations", english)
+            if not local or not local["attributes"].get("feedbackEmail"):
                 missing.insert(0, "feedbackEmail")
             if missing:
                 raise Stop("Beta App Review needs these fields in the --contact file first: " + ", ".join(missing))
