@@ -132,6 +132,16 @@ struct HeroPicture: View {
                 switch load {
                 case .loading:
                     Color.clear.shimmering()
+                case .shown(let image) where HeroPicture.fills(image):
+                    Color.clear
+                        .overlay {
+                            Image(uiImage: image)
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFill()
+                        }
+                        .clipped()
+                        .transition(.opacity)
                 case .shown(let image):
                     Image(uiImage: image)
                         .resizable()
@@ -162,6 +172,12 @@ struct HeroPicture: View {
         .accessibilityLabel(accessibility(load))
         .accessibilityHint("Shows the picture’s link")
         .sheet(isPresented: $inspecting) { PictureInspector(link: link) }
+    }
+
+    static func fills(_ image: UIImage) -> Bool {
+        guard !image.hasAlpha, image.size.height > 0 else { return false }
+        let ratio = image.size.width / image.size.height
+        return abs(log(ratio / (4 / 3))) < 0.2
     }
 
     private func accessibility(_ load: PictureLoad) -> String {

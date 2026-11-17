@@ -271,7 +271,7 @@ struct PriceView: View {
         switch highlight.value {
         case .money(let amount, _):
             let parts = PriceView.split(amount)
-            (Text(parts.main) + Text(parts.minor).foregroundColor(Ink.secondary).font(.system(size: 30, weight: .semibold)))
+            Text("\(Text(parts.main))\(Text(parts.minor).foregroundStyle(Ink.secondary).font(.system(size: 30, weight: .semibold)))")
                 .type(.display)
                 .foregroundStyle(Ink.primary)
                 .monospacedDigit()

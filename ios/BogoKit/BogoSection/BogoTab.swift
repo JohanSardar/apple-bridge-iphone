@@ -273,10 +273,15 @@ struct PendingCard: View {
             HStack(alignment: .center) {
                 if let price = record.request.flatMap({ Review($0).price }), case .money(let amount, _) = price.value {
                     let parts = PriceView.split(amount)
-                    (Text(parts.main) + Text(parts.minor).foregroundColor(Ink.secondary))
+                    Text("\(Text(parts.main))\(Text(parts.minor).foregroundStyle(Ink.secondary))")
                         .type(.title2)
                         .monospacedDigit()
                         .foregroundStyle(Ink.primary)
+                } else if let facts = record.request.map({ PendingCard.facts(Review($0)) }), !facts.isEmpty {
+                    Text(facts)
+                        .type(.label, weight: .medium)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: Space.s)
                 HStack(spacing: 6) {
@@ -294,6 +299,16 @@ struct PendingCard: View {
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens the request to approve or deny")
+    }
+
+    static func facts(_ review: Review) -> String {
+        review.details.prefix(2).compactMap { highlight -> String? in
+            switch highlight.value {
+            case .text(.string(let text)) where !text.isEmpty && !text.contains("\n"): return text
+            case .text(.number(let text)): return text
+            default: return nil
+            }
+        }.joined(separator: " · ")
     }
 }
 
