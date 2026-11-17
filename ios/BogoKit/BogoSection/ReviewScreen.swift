@@ -207,12 +207,23 @@ struct ReviewCard: View {
         VStack(alignment: .leading, spacing: Space.l) {
             HStack(spacing: Space.xs) {
                 Monogram(request.agentName)
-                Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(1)
-                Text(asks).type(.label).foregroundStyle(Ink.secondary).lineLimit(1)
-                Spacer(minLength: Space.xs)
-                Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))
-                    .type(.caption)
-                    .foregroundStyle(Ink.tertiary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Space.xs) {
+                        Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(1)
+                        Text(asks).type(.label).foregroundStyle(Ink.secondary).lineLimit(1)
+                        Spacer(minLength: Space.xs)
+                        Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))
+                            .type(.caption)
+                            .foregroundStyle(Ink.tertiary)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(Text(Formatting.visible(request.agentName)).foregroundStyle(Ink.primary).fontWeight(.semibold)) \(Text(asks).foregroundStyle(Ink.secondary))")
+                            .type(.label)
+                        Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))
+                            .type(.caption)
+                            .foregroundStyle(Ink.tertiary)
+                    }
+                }
             }
             .accessibilityElement(children: .combine)
             VStack(alignment: .leading, spacing: Space.xs) {
@@ -303,10 +314,9 @@ struct ReasonCard: View {
     var body: some View {
         let request = review.request
         VStack(alignment: .leading, spacing: Space.s) {
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "sparkle").font(.system(size: 11, weight: .bold))
-                Text("Agent’s reason").type(.eyebrow)
-                Text("· unverified").type(.eyebrow).opacity(0.7)
+                Text("Agent’s reason \(Text("· unverified").foregroundStyle(Ink.claim.opacity(0.7)))").type(.eyebrow)
             }
             .foregroundStyle(Ink.claim)
             .accessibilityElement(children: .combine)

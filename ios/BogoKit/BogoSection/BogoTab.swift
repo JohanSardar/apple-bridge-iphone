@@ -215,7 +215,7 @@ struct PendingCard: View {
                 let review = Review(request)
                 HStack(spacing: Space.xs) {
                     Monogram(request.agentName, size: 20)
-                    Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(1)
+                    Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(2).layoutPriority(1)
                     Text("· " + Formatting.ago(record.receivedMs)).type(.label).foregroundStyle(Ink.tertiary).lineLimit(1)
                     Spacer(minLength: Space.xs)
                     if entry.count > 1 {

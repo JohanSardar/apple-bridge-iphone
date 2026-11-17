@@ -110,7 +110,7 @@ struct ActivityRow: View {
                 Text(review.map { Formatting.visible($0.title) } ?? AttributedString("Unreadable request"))
                     .type(.callout, weight: .semibold)
                     .foregroundStyle(ended ? Ink.secondary : Ink.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                 Text(detail(review, history.text))
                     .type(.caption)
                     .foregroundStyle(Ink.secondary)
