@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and test
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | grep -iv beta | sort -V | tail -1)" && xcodebuild -version
+      - run: make lint
+      - run: make test
+
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: for the Simulator
+            command: make simulator
+          - name: for iPhone (Release, unsigned)
+            command: >-
+              make project &&
+              xcodebuild -quiet -project ios/AppleBridge.xcodeproj -scheme AppleBridge
+              -configuration Release -sdk iphoneos -destination generic/platform=iOS
+              -derivedDataPath .build/ios/Device CODE_SIGNING_ALLOWED=NO build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | grep -iv beta | sort -V | tail -1)" && xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - run: ${{ matrix.command }}

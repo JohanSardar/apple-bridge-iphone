@@ -3,13 +3,15 @@ options:
   bundleIdPrefix: com.johansardar.applebridge
   deploymentTarget:
     iOS: '26.0'
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: '6.0'
     APPLE_BRIDGE_APNS_ENVIRONMENT: development
     MARKETING_VERSION: 0.1
     CURRENT_PROJECT_VERSION: 1
-    DEVELOPMENT_TEAM: AX3C2B78YD
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: Apple Development
     PRODUCT_BUNDLE_IDENTIFIER: com.johansardar.applebridge.ios
