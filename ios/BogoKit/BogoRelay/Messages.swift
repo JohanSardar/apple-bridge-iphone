@@ -261,7 +261,6 @@ public enum Registration {
 }
 
 public enum RegistrationError: Error, Equatable {
-    case badCode
     case noMac
     case macCancelled
     case refused(String)
@@ -271,7 +270,7 @@ public enum RegistrationError: Error, Equatable {
 
 @MainActor
 public protocol RegistrationChannel: AnyObject {
-    var code: String? { get }
+    var code: String { get }
     func macConfirmation() async throws -> MacConfirmation
     func clientDataHash(approvalKey: Data) -> Data
     func saveRoute() throws -> (route: MacRoute, approverID: Data)?
@@ -289,11 +288,4 @@ public protocol MacLink: AnyObject {
     func send(_ message: PhoneMessage, sealed: Data, msgID: Data, to mac: MacRecord) async throws
     func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer]
     func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel
-    func register(code: String) async throws -> RegistrationChannel
-}
-
-public extension MacLink {
-    func register(code: String) async throws -> RegistrationChannel {
-        throw RegistrationError.badCode
-    }
 }

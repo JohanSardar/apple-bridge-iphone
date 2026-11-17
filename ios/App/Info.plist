@@ -37,7 +37,11 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Scan your gateway pairing code, or capture a photo after Face ID approval and upload it to your gateway.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your Apple Bridge gateway on the local network.</string>
+	<string>Connect to your Apple Bridge gateway, and find a Mac you add to BOGO, on the local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_bogo-pair._tcp</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

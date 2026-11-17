@@ -18,6 +18,8 @@ public final class RelayMacLink: MacLink {
     private var mailboxes: [Data: Mailbox] = [:]
     private var macs: [Data: MacRecord] = [:]
     private var keys: [String: ChannelKeys] = [:]
+    private let nearby = NearbyMacs()
+    private var waiting: [String: PairCode] = [:]
 
     public init(endpoint: RelayEndpoint) {
         self.endpoint = endpoint
@@ -62,14 +64,15 @@ public final class RelayMacLink: MacLink {
         try await mailbox.client.send(to: route.macMailbox, msgID: msgID, envelope: sealed)
     }
 
-    public func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] { [] }
-
-    public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
-        throw RegistrationError.badCode
+    public func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] {
+        let found = nearby.current()
+        waiting = Dictionary(found.map { ($0.id, $0.code) }, uniquingKeysWith: { first, _ in first })
+        return found.map { RegistrationOffer(id: $0.id, label: $0.name, opened: $0.seen) }
     }
 
-    public func register(code text: String) async throws -> RegistrationChannel {
-        guard let code = PairCode(text) else { throw RegistrationError.badCode }
+    public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
+        guard let code = waiting[offer.id] else { throw RegistrationError.noMac }
+        nearby.stop()
         let keys = ChannelKeys()
         let client = RelayClient(endpoint: code.endpoint(publicRelay: endpoint), key: keys.relay)
         return try await RelayRegistration.begin(client: client, keys: keys, code: code)
@@ -173,15 +176,11 @@ public final class DebugMacLinks: MacLink {
     }
 
     public func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] {
-        await standIn.offers(excluding: macs)
+        await relay.offers(excluding: macs) + standIn.offers(excluding: macs)
     }
 
     public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
-        try await standIn.register(offer)
-    }
-
-    public func register(code: String) async throws -> RegistrationChannel {
-        try await relay.register(code: code)
+        offer.id == StandInMacLink.offerID ? try await standIn.register(offer) : try await relay.register(offer)
     }
 }
 #endif

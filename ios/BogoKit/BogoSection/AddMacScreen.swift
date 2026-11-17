@@ -2,18 +2,14 @@ import BogoCrypto
 import BogoModel
 import BogoRelay
 import SwiftUI
-import VisionKit
 
 struct AddMacScreen: View {
     let approver: PhoneApprover
     @Environment(\.dismiss) private var dismiss
     @State private var offers: [RegistrationOffer] = []
+    @State private var looking = true
     @State private var step: Step = .choose
     @State private var offerName = ""
-    @State private var typed = ""
-    @State private var joining = false
-    @State private var problem: String?
-    @State private var scanning = false
 
     enum Step {
         case choose
@@ -50,13 +46,6 @@ struct AddMacScreen: View {
             }
         }
         .task { await look() }
-        .sheet(isPresented: $scanning) {
-            CodeScanner { value in
-                scanning = false
-                join(value)
-            }
-            .ignoresSafeArea()
-        }
         .presentationCornerRadius(Radius.sheet)
     }
 
@@ -65,7 +54,7 @@ struct AddMacScreen: View {
             VStack(alignment: .leading, spacing: Space.xl) {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Add a Mac").type(.title).foregroundStyle(Ink.primary)
-                    Text("On your Mac, run this command, then scan the code it shows.")
+                    Text("On your Mac, run this command. The Mac shows up here while it waits, when this iPhone is on the same network.")
                         .type(.callout)
                         .foregroundStyle(Ink.secondary)
                 }
@@ -77,38 +66,9 @@ struct AddMacScreen: View {
                     .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field, style: .continuous))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Command: bogo approver add")
-                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                    Button("Scan code") { scanning = true }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .disabled(joining)
-                }
-                VStack(alignment: .leading, spacing: Space.s) {
-                    Text("Or type the code").type(.label).foregroundStyle(Ink.secondary)
-                    HStack(spacing: Space.s) {
-                        TextField("bogo1-", text: $typed)
-                            .type(.mono)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .submitLabel(.go)
-                            .onSubmit { join(typed) }
-                            .padding(Space.m)
-                            .frame(maxWidth: .infinity)
-                            .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field, style: .continuous))
-                            .accessibilityLabel("Pairing code")
-                        Button {
-                            join(typed)
-                        } label: {
-                            if joining { ProgressView() } else { Text("Add") }
-                        }
-                        .buttonStyle(QuietButtonStyle(tint: Ink.primary))
-                        .fixedSize()
-                        .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty || joining)
-                    }
-                    if let problem {
-                        Text(problem).type(.callout).foregroundStyle(Ink.secondary)
-                    }
-                }
-                if !offers.isEmpty {
+                if offers.isEmpty {
+                    Searching()
+                } else {
                     RowSection("Ready to add") {
                         ForEach(Array(offers.enumerated()), id: \.element.id) { index, offer in
                             if index > 0 { Hairline() }
@@ -141,33 +101,19 @@ struct AddMacScreen: View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: Space.xl) {
-                if let code = channel.code {
-                    VStack(spacing: Space.xs) {
-                        Text(confirmation?.macName ?? offerName)
-                            .type(.callout)
-                            .foregroundStyle(Ink.secondary)
-                        Text("Do the codes match?").type(.title).foregroundStyle(Ink.primary)
-                    }
-                    CodeTiles(code: code)
-                    Text(confirmation == nil ? "Check that your Mac shows the same number, then confirm on the Mac." : "Your Mac confirmed. Confirm here to finish.")
+                VStack(spacing: Space.xs) {
+                    Text(confirmation?.macName ?? offerName)
                         .type(.callout)
                         .foregroundStyle(Ink.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 300)
-                        .contentTransition(.opacity)
-                } else {
-                    VStack(spacing: Space.xs) {
-                        Text(confirmation.map { "Add \($0.macName)" } ?? "Add a Mac")
-                            .type(.title)
-                            .foregroundStyle(Ink.primary)
-                            .multilineTextAlignment(.center)
-                        Text("Its agents’ requests will come to this iPhone for you to approve.")
-                            .type(.callout)
-                            .foregroundStyle(Ink.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 300)
-                    }
+                    Text("Do the codes match?").type(.title).foregroundStyle(Ink.primary)
                 }
+                CodeTiles(code: channel.code)
+                Text(confirmation == nil ? "Check that your Mac shows the same number, then confirm on the Mac." : "Your Mac confirmed. Confirm here to finish.")
+                    .type(.callout)
+                    .foregroundStyle(Ink.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+                    .contentTransition(.opacity)
             }
             .padding(.horizontal, Space.gutter)
             Spacer()
@@ -270,34 +216,6 @@ struct AddMacScreen: View {
         }
     }
 
-    private func join(_ text: String) {
-        guard !joining else { return }
-        problem = nil
-        joining = true
-        Task {
-            defer { joining = false }
-            do {
-                let channel = try await approver.beginRegistration(code: text)
-                typed = ""
-                step = .compare(channel, nil)
-                let confirmation = try await channel.macConfirmation()
-                if case .compare = step { step = .compare(channel, confirmation) }
-            } catch RegistrationError.badCode {
-                problem = "That isn’t a BOGO code. It starts with bogo1-."
-            } catch RegistrationError.noMac {
-                problem = "No Mac is waiting with this code. Run `bogo approver add` again."
-            } catch RegistrationError.tampered {
-                step = .failed("The code didn’t check out, so nothing was added. Run `bogo approver add` again.")
-            } catch {
-                switch step {
-                case .choose: problem = "Couldn’t reach the Mac’s relay. Check the connection and try again."
-                case .compare: step = .failed("The Mac stopped the attempt. Run `bogo approver add` again.")
-                default: break
-                }
-            }
-        }
-    }
-
     private func start(_ offer: RegistrationOffer) {
         offerName = offer.label
         Task {
@@ -308,6 +226,8 @@ struct AddMacScreen: View {
                 if case .compare = step { step = .compare(channel, confirmation) }
             } catch RegistrationError.tampered {
                 step = .failed("The codes couldn’t be checked safely, so nothing was added. Run `bogo approver add` again.")
+            } catch RegistrationError.noMac {
+                step = .failed("\(offer.label) is no longer waiting, or another iPhone is adding it. Run `bogo approver add` again.")
             } catch {
                 switch step {
                 case .choose, .compare: step = .failed("The Mac stopped the attempt. Run `bogo approver add` again.")
@@ -352,36 +272,12 @@ struct CodeTiles: View {
     }
 }
 
-struct CodeScanner: UIViewControllerRepresentable {
-    let scanned: (String) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(scanned: scanned) }
-
-    func makeUIViewController(context: Context) -> DataScannerViewController {
-        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])], isHighlightingEnabled: true)
-        scanner.delegate = context.coordinator
-        try? scanner.startScanning()
-        return scanner
-    }
-
-    func updateUIViewController(_ uiViewController: DataScannerViewController, context: Context) {}
-
-    static func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator: Coordinator) {
-        uiViewController.stopScanning()
-    }
-
-    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let scanned: (String) -> Void
-        private var done = false
-
-        init(scanned: @escaping (String) -> Void) { self.scanned = scanned }
-
-        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
-            for case .barcode(let code) in addedItems {
-                guard !done, let value = code.payloadStringValue, PairCode(value) != nil else { continue }
-                done = true
-                scanned(value)
-            }
+struct Searching: View {
+    var body: some View {
+        HStack(spacing: Space.s) {
+            ProgressView()
+            Text("Looking for your Mac…").type(.callout).foregroundStyle(Ink.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 }

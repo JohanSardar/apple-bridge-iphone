@@ -82,6 +82,10 @@ enum RegWire {
         return bytes
     }
 
+    static func code(ePubM: Data, ePubP: Data, nM: Data, nP: Data) -> String {
+        Registration.code(sha(tag("bogo-reg-code"), ePubM, ePubP, nM, nP))
+    }
+
     static func json(_ data: Data) -> [String: Any]? {
         try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
@@ -136,7 +140,7 @@ public struct PairCode: Equatable, Sendable {
 
 @MainActor
 final class RelayRegistration: RegistrationChannel {
-    let code: String? = nil
+    let code: String
     private let client: RelayClient
     private let keys: ChannelKeys
     private let room: Room
@@ -177,10 +181,12 @@ final class RelayRegistration: RegistrationChannel {
         }
         let th = RegWire.transcriptHash(offer: room.id, ePubM: ePubM, ePubP: ePubP, commit: commit, nM: nM, nP: nP)
         return RelayRegistration(client: client, keys: keys, room: room, transcriptHash: th,
-                                 key: RegWire.phaseKey(shared: shared, transcriptHash: th))
+                                 key: RegWire.phaseKey(shared: shared, transcriptHash: th),
+                                 code: RegWire.code(ePubM: ePubM, ePubP: ePubP, nM: nM, nP: nP))
     }
 
-    private init(client: RelayClient, keys: ChannelKeys, room: Room, transcriptHash: Data, key: SymmetricKey) {
+    private init(client: RelayClient, keys: ChannelKeys, room: Room, transcriptHash: Data, key: SymmetricKey, code: String) {
+        self.code = code
         self.client = client
         self.keys = keys
         self.room = room

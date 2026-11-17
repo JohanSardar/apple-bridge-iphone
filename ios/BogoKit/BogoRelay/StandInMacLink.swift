@@ -269,7 +269,7 @@ public final class StandInMacLink: MacLink {
 
 @MainActor
 final class StandInRegistration: RegistrationChannel {
-    let code: String?
+    let code: String
     private let link: StandInMacLink
     private let transcriptHash: Data
     private let challenge: Data
