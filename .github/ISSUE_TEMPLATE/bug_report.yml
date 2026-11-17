@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in the iPhone app doesn't work, outside the BOGO tab.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Bug in the BOGO tab?** File it with the rest of BOGO: [BOGO's issues](https://github.com/JohanSardar/bogo/issues/new/choose).
+        **Security problem?** Don't file it here. [Report it privately](https://github.com/JohanSardar/apple-bridge-iphone/security/advisories/new) instead.
+
+        Before you paste anything, remove pairing codes, tokens and personal data.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Pairing with the Mac
+        - Command delivery or push
+        - A capability (alarms, notifications, location, Health, motion, Screen Time, Siri, ...)
+        - Widgets or Live Activities
+        - Settings or Diagnostics
+        - Building the app
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Screenshots and diagnostics
+      description: Settings → Diagnostics in the app, screenshots, or build output.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit you built from, or the TestFlight build number.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: iPhone model and iOS version, or Simulator

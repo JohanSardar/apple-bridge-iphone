@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bug in the BOGO tab
+    url: https://github.com/JohanSardar/bogo/issues/new/choose
+    about: BOGO bugs, including the BOGO tab, go to the BOGO repo.
+  - name: Report a vulnerability privately
+    url: https://github.com/JohanSardar/apple-bridge-iphone/security/advisories/new
+    about: Security problems go here, never in a public issue. BOGO-tab vulnerabilities go to BOGO's private reporting.
+  - name: Apple Bridge on the Mac
+    url: https://github.com/JohanSardar/apple-bridge
+    about: The Mac gateway has its own repo.
