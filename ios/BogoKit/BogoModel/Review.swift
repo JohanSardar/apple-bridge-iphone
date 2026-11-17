@@ -64,7 +64,7 @@ public struct Review: Sendable {
                 continue
             }
             switch hint.format {
-            case .text:
+            case .text, .title, .subtitle, .image:
                 highlights.append(Highlight(id: index, path: hint.path, label: label, value: .text(value)))
             case .moneyMinor(let currency):
                 if case .number(let token) = value, let amount = MoneyAmount.minor(token, currency: currency) {

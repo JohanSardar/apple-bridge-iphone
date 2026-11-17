@@ -41,6 +41,9 @@ public enum PathElement: Hashable, Sendable {
 public enum DisplayFormat: Equatable, Sendable {
     case text
     case moneyMinor(String)
+    case title
+    case subtitle
+    case image
 }
 
 public struct DisplayHint: Equatable, Sendable {

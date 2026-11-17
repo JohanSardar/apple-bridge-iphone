@@ -102,6 +102,9 @@ struct RequestReader {
         switch try u8() {
         case 0: return DisplayHint(path: path, format: .text)
         case 1: return DisplayHint(path: path, format: .moneyMinor(try string()))
+        case 2: return DisplayHint(path: path, format: .title)
+        case 3: return DisplayHint(path: path, format: .subtitle)
+        case 4: return DisplayHint(path: path, format: .image)
         default: throw Unreadable()
         }
     }
