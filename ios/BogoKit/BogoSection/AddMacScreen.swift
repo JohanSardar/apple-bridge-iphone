@@ -46,7 +46,7 @@ struct AddMacScreen: View {
             }
         }
         .task { await look() }
-        .presentationCornerRadius(Radius.card + 12)
+        .presentationCornerRadius(Radius.sheet)
     }
 
     private var choose: some View {
@@ -58,51 +58,38 @@ struct AddMacScreen: View {
                         .type(.callout)
                         .foregroundStyle(Ink.secondary)
                 }
-                HStack(spacing: Space.xs) {
-                    Text("$").foregroundStyle(Ink.tertiary)
-                    Text("bogo approver add").foregroundStyle(Ink.primary)
-                    Spacer()
-                }
-                .type(.mono)
-                .padding(Space.m)
-                .background(Ink.well, in: RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
+                Text("bogo approver add")
+                    .type(.mono)
+                    .foregroundStyle(Ink.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Space.m)
+                    .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field, style: .continuous))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Command: bogo approver add")
                 if offers.isEmpty {
                     Searching()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, Space.l)
                 } else {
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        Eyebrow("Ready to add")
-                        VStack(spacing: 0) {
-                            ForEach(Array(offers.enumerated()), id: \.element.id) { index, offer in
-                                if index > 0 { Hairline().padding(.leading, 60) }
-                                Button { start(offer) } label: {
-                                    HStack(spacing: Space.s) {
-                                        Tile(symbol: "laptopcomputer", size: 44)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(offer.label).type(.callout, weight: .semibold).foregroundStyle(Ink.primary)
-                                            HStack(spacing: 6) {
-                                                StatusDot(Ink.positive)
-                                                Text("Waiting for this iPhone").type(.caption).foregroundStyle(Ink.secondary)
-                                            }
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.tertiary)
+                    RowSection("Ready to add") {
+                        ForEach(Array(offers.enumerated()), id: \.element.id) { index, offer in
+                            if index > 0 { Hairline() }
+                            Button { start(offer) } label: {
+                                HStack(spacing: Space.s) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(offer.label).type(.headline).foregroundStyle(Ink.primary)
+                                        Text("Waiting for this iPhone").type(.label).foregroundStyle(Ink.secondary)
                                     }
-                                    .padding(.vertical, Space.s)
-                                    .contentShape(Rectangle())
+                                    Spacer()
+                                    Chevron()
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel("\(offer.label), ready to add")
+                                .padding(.vertical, Space.m)
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(offer.label), ready to add")
                         }
-                        .padding(.horizontal, Space.m)
-                        .card(padding: 0, radius: Radius.inner + 4)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
                 }
             }
             .padding(Space.gutter)
@@ -115,12 +102,9 @@ struct AddMacScreen: View {
             Spacer()
             VStack(spacing: Space.xl) {
                 VStack(spacing: Space.xs) {
-                    HStack(spacing: Space.xs) {
-                        Image(systemName: "laptopcomputer")
-                        Text(confirmation?.macName ?? offerName)
-                    }
-                    .type(.label, weight: .semibold)
-                    .foregroundStyle(Ink.secondary)
+                    Text(confirmation?.macName ?? offerName)
+                        .type(.callout)
+                        .foregroundStyle(Ink.secondary)
                     Text("Do the codes match?").type(.title).foregroundStyle(Ink.primary)
                 }
                 CodeTiles(code: channel.code)
@@ -140,7 +124,7 @@ struct AddMacScreen: View {
                         confirm(channel, confirmation)
                     } label: {
                         HStack(spacing: Space.xs) {
-                            if busy { ProgressView().tint(Ink.inverse) } else { Image(systemName: "faceid") }
+                            if busy { ProgressView().tint(Ink.inverse) }
                             Text("Confirm with Face ID")
                         }
                     }
@@ -187,7 +171,6 @@ struct AddMacScreen: View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: Space.l) {
-                Tile(symbol: "clock", size: 76, tint: Ink.secondary)
                 Text("Waiting for \(name)").type(.title).foregroundStyle(Ink.primary).multilineTextAlignment(.center)
                 Text("Your Mac hasn’t answered yet. It finishes on its own once the Mac confirms, and shows under Macs until then.")
                     .type(.callout)
@@ -207,7 +190,6 @@ struct AddMacScreen: View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: Space.l) {
-                Tile(symbol: "exclamationmark.triangle.fill", size: 76, tint: Ink.claim, wash: Ink.claimWash)
                 Text("Mac not added").type(.title).foregroundStyle(Ink.primary)
                 Text(reason)
                     .type(.callout)
@@ -225,11 +207,6 @@ struct AddMacScreen: View {
             .padding(.bottom, Space.s)
         }
         .onAppear { Haptics.warning() }
-    }
-
-    private func spaced(_ code: String) -> String {
-        guard code.count == 6 else { return code }
-        return String(code.prefix(3)) + " " + String(code.suffix(3))
     }
 
     private func look() async {
@@ -281,81 +258,25 @@ struct AddMacScreen: View {
     }
 }
 
+/// The 6-digit pairing code in large tabular figures, split 3 + 3.
 struct CodeTiles: View {
     let code: String
 
     var body: some View {
-        HStack(spacing: Space.xs) {
-            ForEach(Array(code.enumerated()), id: \.offset) { index, digit in
-                if index == 3 { Color.clear.frame(width: Space.xs, height: 1) }
-                Text(String(digit))
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Ink.primary)
-                    .frame(width: 44, height: 58)
-                    .background(Ink.surface, in: RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Radius.tile, style: .continuous).strokeBorder(Ink.hairline, lineWidth: 0.75))
-                    .shadow(color: Ink.shadow, radius: 8, y: 3)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(code.map(String.init).joined(separator: " "))
+        Text(code.count == 6 ? String(code.prefix(3)) + "\u{2009}\u{2009}" + String(code.suffix(3)) : code)
+            .font(.system(size: 48, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(Ink.primary)
+            .accessibilityLabel(code.map(String.init).joined(separator: " "))
     }
 }
 
 struct Searching: View {
-    @State private var sweep = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        VStack(spacing: Space.l) {
-            ZStack {
-                ForEach(0..<3) { ring in
-                    Circle()
-                        .stroke(Ink.primary.opacity(0.08), lineWidth: 1)
-                        .frame(width: 70 + CGFloat(ring) * 40, height: 70 + CGFloat(ring) * 40)
-                }
-                Circle()
-                    .stroke(Ink.primary.opacity(0.25), lineWidth: 1.5)
-                    .frame(width: 70, height: 70)
-                    .scaleEffect(sweep ? 2.2 : 1)
-                    .opacity(sweep ? 0 : 1)
-                Tile(symbol: "laptopcomputer", size: 56)
-            }
-            .frame(height: 170)
+        HStack(spacing: Space.s) {
+            ProgressView()
             Text("Looking for your Mac…").type(.callout).foregroundStyle(Ink.secondary)
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 2).repeatForever(autoreverses: false)) { sweep = true }
-        }
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct DoneMark: View {
-    @State private var ring: CGFloat = 0
-    @State private var check: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ZStack {
-            Circle().fill(Ink.positiveWash).scaleEffect(ring)
-            Circle().trim(from: 0, to: ring).stroke(Ink.positive, style: StrokeStyle(lineWidth: 4, lineCap: .round)).rotationEffect(.degrees(-90))
-            CheckShape().trim(from: 0, to: check)
-                .stroke(Ink.positive, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                .frame(width: 40, height: 31)
-        }
-        .frame(width: 96, height: 96)
-        .accessibilityHidden(true)
-        .onAppear {
-            if reduceMotion {
-                ring = 1
-                check = 1
-            } else {
-                withAnimation(.easeOut(duration: 0.45)) { ring = 1 }
-                withAnimation(.easeOut(duration: 0.35).delay(0.32)) { check = 1 }
-            }
-        }
     }
 }

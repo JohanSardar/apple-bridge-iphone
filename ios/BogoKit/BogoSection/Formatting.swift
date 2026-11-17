@@ -65,23 +65,34 @@ enum Formatting {
         }
     }
 
-    static func asks(_ agent: String) -> AttributedString {
-        var name = visible(agent)
-        name.foregroundColor = .primary
-        name.font = .subheadline.weight(.semibold)
-        return name + AttributedString(" wants to run")
+    /// "Stripe · Create spend request": the upstream as a name and the action in words. The raw identifiers stay in All details.
+    static func action(_ review: Review) -> AttributedString {
+        visible(service(review.request.upstream)) + AttributedString(" · ") + visible(humanize(review.action ?? review.request.tool))
     }
 
-    static func via(_ review: Review) -> AttributedString {
-        let request = review.request
-        let place = review.action == nil ? AttributedString("on ") + visible(request.upstream)
-            : visible(request.tool) + AttributedString(" on ") + visible(request.upstream)
-        guard review.titleFromRole else { return place }
-        return visible(review.action ?? request.tool) + AttributedString(" · ") + place
-    }
-
+    /// The card's title: the `title` role as the agent sent it, or else the action in words.
     static func title(_ review: Review) -> String {
-        review.title
+        review.titleFromRole ? review.title : humanize(review.title)
+    }
+
+    static func service(_ upstream: String) -> String {
+        let known = ["github": "GitHub", "gmail": "Gmail", "stripe": "Stripe", "link": "Link", "slack": "Slack", "openai": "OpenAI"]
+        if let name = known[upstream.lowercased()] { return name }
+        let spoken = words(upstream)
+        return spoken.prefix(1).uppercased() + spoken.dropFirst()
+    }
+
+    /// "spend-request_create" → "Create spend request", "send_email" → "Send email".
+    static func humanize(_ identifier: String) -> String {
+        var parts = words(identifier).split(separator: " ").map(String.init)
+        guard !parts.isEmpty else { return identifier }
+        parts = parts.map { $0.count > 1 && $0 == $0.uppercased() ? $0 : $0.lowercased() }
+        let verbs: Set = ["create", "update", "delete", "remove", "list", "get", "send", "cancel", "confirm", "retrieve", "search", "add", "set", "run", "pay", "post", "read", "write"]
+        if parts.count > 1, verbs.contains(parts[parts.count - 1]), !verbs.contains(parts[0]) {
+            parts.insert(parts.removeLast(), at: 0)
+        }
+        let joined = parts.joined(separator: " ")
+        return joined.prefix(1).uppercased() + joined.dropFirst()
     }
 
     static func summary(_ value: ArgumentValue) -> AttributedString {
@@ -135,20 +146,6 @@ enum Formatting {
         return joined.prefix(1).uppercased() + joined.dropFirst()
     }
 
-    static func row(_ review: Review) -> (headline: AttributedString, detail: AttributedString) {
-        let request = review.request
-        let agent = visible(request.agentName) + AttributedString(" · ")
-        if let money = headline(review) { return (AttributedString(money), agent + visible(title(review))) }
-        return (visible(title(review)), agent + visible(review.action == nil ? request.upstream : request.tool))
-    }
-
-    static func headline(_ review: Review) -> String? {
-        for highlight in review.highlights {
-            if case .money(let amount, _) = highlight.value { return amount.formatted }
-        }
-        return nil
-    }
-
     static func when(_ date: Date, now: Date = Date()) -> String {
         let calendar = Calendar.current
         if calendar.isDate(date, inSameDayAs: now) { return date.formatted(date: .omitted, time: .shortened) }
@@ -169,14 +166,6 @@ enum Formatting {
         if seconds < 3600 { return "\(seconds / 60)m ago" }
         if seconds < 86_400 { return "\(seconds / 3600)h ago" }
         return when(Date(timeIntervalSince1970: TimeInterval(ms) / 1000), now: now)
-    }
-
-    static func symbol(_ review: Review) -> String {
-        if review.price != nil { return "creditcard" }
-        let name = (review.action ?? review.request.tool).lowercased() + " " + review.request.upstream.lowercased()
-        let symbols: [(String, String)] = [("mail", "envelope"), ("message", "bubble.left"), ("deploy", "shippingbox"), ("file", "doc"),
-                                           ("search", "magnifyingglass"), ("calendar", "calendar"), ("delete", "trash"), ("pay", "creditcard")]
-        return symbols.first { name.contains($0.0) }?.1 ?? "terminal"
     }
 
     static func remaining(_ until: Date, now: Date) -> String {

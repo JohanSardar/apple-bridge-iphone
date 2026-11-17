@@ -25,7 +25,7 @@ struct ReviewScreen: View {
             if let record = approver.record(id) {
                 content(record, now: UInt64(Date().timeIntervalSince1970 * 1000))
             } else {
-                ContentUnavailableView("Request Not Found", systemImage: "questionmark.circle")
+                Text("This request is no longer on this iPhone.").type(.body).foregroundStyle(Ink.secondary).padding(Space.gutter)
             }
             if let approved {
                 ApprovedOverlay(summary: approved) { dismiss() }
@@ -73,29 +73,34 @@ struct ReviewScreen: View {
         let paused = approver.isPaused(record)
         let entry = Inbox.entries(approver.shown, now: now).first { $0.records.contains { $0.id == record.id } }
         ScrollView {
-            VStack(spacing: Space.m) {
+            VStack(alignment: .leading, spacing: 0) {
                 if let status = Formatting.status(record, now: now), !record.phase.isPending || !open, approved == nil {
-                    StatusBanner(text: status, mark: Formatting.history(record).mark, pending: record.phase.isPending)
+                    StatusLine(text: status, mark: Formatting.history(record).mark, pending: record.phase.isPending)
+                        .padding(.bottom, Space.l)
                 }
                 if let request = record.request {
                     let review = Review(request)
-                    ReviewCard(review: review, received: record.receivedMs)
-                        .offset(y: arrived ? 0 : 24)
+                    ReviewSummary(review: review, received: record.receivedMs)
+                        .offset(y: arrived ? 0 : 16)
                         .opacity(arrived ? 1 : 0)
-                    ReasonCard(review: review)
-                        .offset(y: arrived ? 0 : 36)
-                        .opacity(arrived ? 1 : 0)
-                    DetailsCard(review: review, macName: approver.mac(record.bogoID)?.name,
-                                waiting: open ? (entry?.count ?? 1) : 1, showDetails: { details = true })
-                        .offset(y: arrived ? 0 : 48)
-                        .opacity(arrived ? 1 : 0)
+                    Group {
+                        Hairline().padding(.vertical, Space.xl)
+                        ReasonSection(review: review)
+                        Hairline().padding(.vertical, Space.xl)
+                        DetailsSection(review: review, macName: approver.mac(record.bogoID)?.name,
+                                       waiting: open ? (entry?.count ?? 1) : 1, showDetails: { details = true })
+                    }
+                    .offset(y: arrived ? 0 : 24)
+                    .opacity(arrived ? 1 : 0)
                 } else {
-                    UnreadableCard(record: record, macName: approver.mac(record.bogoID)?.name, showDetails: { details = true })
+                    UnreadableSection(record: record, macName: approver.mac(record.bogoID)?.name)
+                    Hairline().padding(.vertical, Space.xl)
+                    AllDetailsRow(count: nil) { details = true }
                 }
-                Color.clear.frame(height: Space.xs)
             }
             .padding(.horizontal, Space.gutter)
             .padding(.top, Space.xs)
+            .padding(.bottom, Space.xl)
             .id(refresh)
         }
         .scrollIndicators(.hidden)
@@ -108,8 +113,8 @@ struct ReviewScreen: View {
             if let request = record.request, open, !paused {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Pause \(request.agentName)", systemImage: "pause.circle", role: .destructive) { pausing = true }
-                        Button("All details", systemImage: "doc.text.magnifyingglass") { details = true }
+                        Button("Pause \(request.agentName)", role: .destructive) { pausing = true }
+                        Button("All details") { details = true }
                     } label: {
                         Image(systemName: "ellipsis")
                     }
@@ -145,12 +150,9 @@ struct ReviewScreen: View {
         }
         .padding(.horizontal, Space.gutter)
         .padding(.top, Space.m)
-        .padding(.bottom, Space.xxs)
-        .background {
-            LinearGradient(stops: [.init(color: Ink.canvas.opacity(0), location: 0), .init(color: Ink.canvas, location: 0.28)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-        }
+        .frame(maxWidth: .infinity)
+        .background(Ink.canvas.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Hairline() }
     }
 
     private func arm() {
@@ -168,7 +170,7 @@ struct ReviewScreen: View {
                 Haptics.success()
                 let review = record.request.map(Review.init)
                 withAnimation(Motion.respecting(reduceMotion, Motion.standard)) {
-                    approved = ApprovedSummary(title: review?.title ?? "Request",
+                    approved = ApprovedSummary(title: review.map(Formatting.title) ?? "Request",
                                                price: review?.price.flatMap { if case .money(let amount, _) = $0.value { return amount } else { return nil } },
                                                mac: approver.mac(record.bogoID)?.name ?? "your Mac")
                 }
@@ -198,80 +200,59 @@ struct ApprovedSummary: Equatable {
     let mac: String
 }
 
-struct ReviewCard: View {
+
+/// Title, who asked, the picture, the merchant and the price: everything sits on the page, nothing boxed.
+struct ReviewSummary: View {
     let review: Review
     let received: UInt64
 
     var body: some View {
         let request = review.request
-        VStack(alignment: .leading, spacing: Space.l) {
-            HStack(spacing: Space.xs) {
-                Monogram(request.agentName)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Space.xs) {
-                        Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(1)
-                        Text(asks).type(.label).foregroundStyle(Ink.secondary).lineLimit(1)
-                        Spacer(minLength: Space.xs)
-                        Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))
-                            .type(.caption)
-                            .foregroundStyle(Ink.tertiary)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(Text(Formatting.visible(request.agentName)).foregroundStyle(Ink.primary).fontWeight(.semibold)) \(Text(asks).foregroundStyle(Ink.secondary))")
-                            .type(.label)
-                        Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))
-                            .type(.caption)
-                            .foregroundStyle(Ink.tertiary)
-                    }
-                }
-            }
-            .accessibilityElement(children: .combine)
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text(Formatting.visible(review.title))
-                    .type(.title)
-                    .foregroundStyle(Ink.primary)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle = review.subtitle, compact {
-                    Text(Formatting.visible(subtitle)).type(.body, weight: .medium).foregroundStyle(Ink.secondary).lineLimit(2)
-                }
-                Text(Formatting.via(review))
-                    .type(.label)
-                    .foregroundStyle(Ink.tertiary)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(Formatting.visible(Formatting.title(review)))
+                .type(.title)
+                .foregroundStyle(Ink.primary)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            if let subtitle = review.subtitle, review.price == nil {
+                Text(Formatting.visible(subtitle))
+                    .type(.body)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(2)
+                    .padding(.top, Space.xxs)
             }
+            Text(Formatting.visible(request.agentName) + AttributedString(" · " + Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000))))
+                .type(.callout)
+                .foregroundStyle(Ink.secondary)
+                .lineLimit(2)
+                .padding(.top, Space.xs)
+                .accessibilityLabel(Text("From \(request.agentName), \(Formatting.when(Date(timeIntervalSince1970: TimeInterval(received) / 1000)))"))
             if let image = review.image {
                 HeroPicture(link: image)
+                    .padding(.top, Space.xl)
                 if review.pictures.count > 1 {
                     ScrollView(.horizontal) {
                         HStack(spacing: Space.xs) {
-                            ForEach(review.pictures.filter { $0 != image }, id: \.self) { PictureThumb(link: $0, size: 56) }
+                            ForEach(review.pictures.filter { $0 != image }, id: \.self) { PictureThumb(link: $0, size: 52) }
                         }
                     }
                     .scrollIndicators(.hidden)
+                    .padding(.top, Space.s)
                     .accessibilityLabel("\(review.pictures.count - 1) more pictures from the agent")
                 }
             }
-            if (review.subtitle != nil && !compact) || review.price != nil {
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    if let subtitle = review.subtitle, !compact {
-                        Text(Formatting.visible(subtitle)).type(.body, weight: .medium).foregroundStyle(Ink.secondary).lineLimit(2)
+            if let price = review.price {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let subtitle = review.subtitle {
+                        Text(Formatting.visible(subtitle)).type(.body).foregroundStyle(Ink.secondary).lineLimit(2)
                     }
-                    if let price = review.price { PriceView(highlight: price) }
+                    PriceView(highlight: price)
                 }
+                .padding(.top, Space.xl)
             }
         }
-        .card()
-    }
-
-    private var compact: Bool {
-        review.image == nil && review.price == nil
-    }
-
-    private var asks: String {
-        if review.price != nil { return "wants to pay" }
-        return "wants to run"
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -281,8 +262,7 @@ struct PriceView: View {
     var body: some View {
         switch highlight.value {
         case .money(let amount, _):
-            let parts = PriceView.split(amount)
-            Text("\(Text(parts.main))\(Text(parts.minor).foregroundStyle(Ink.secondary).font(.system(size: 30, weight: .semibold)))")
+            Text(amount.formatted)
                 .type(.display)
                 .foregroundStyle(Ink.primary)
                 .monospacedDigit()
@@ -294,36 +274,25 @@ struct PriceView: View {
                 Text(Formatting.value(value)).type(.title2).monospaced()
                 Text("\(Formatting.visible(highlight.label)) can’t be shown as \(currency)")
                     .type(.label)
-                    .foregroundStyle(Ink.claim)
+                    .foregroundStyle(Ink.warning)
             }
         case .text, .missing:
             EmptyView()
         }
     }
-
-    static func split(_ amount: MoneyAmount) -> (main: String, minor: String) {
-        let text = amount.formatted
-        guard amount.exponent > 0, let dot = text.lastIndex(of: ".") else { return (text, "") }
-        return (String(text[..<dot]), String(text[dot...]))
-    }
 }
 
-struct ReasonCard: View {
+/// The agent's reason as plain text: a grey label, its words, any mismatch warning, and a footnote that BOGO didn't check it.
+struct ReasonSection: View {
     let review: Review
 
     var body: some View {
         let request = review.request
-        VStack(alignment: .leading, spacing: Space.s) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "sparkle").font(.system(size: 11, weight: .bold))
-                Text("Agent’s reason \(Text("· unverified").foregroundStyle(Ink.claim.opacity(0.7)))").type(.eyebrow)
-            }
-            .foregroundStyle(Ink.claim)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Agent’s reason, unverified")
+        VStack(alignment: .leading, spacing: Space.xs) {
+            FieldLabel("Reason")
             Group {
                 if let justification = request.justification, !justification.isEmpty {
-                    Text(Formatting.visible(justification, quoted: true))
+                    Text(Formatting.visible(justification))
                         .type(.body)
                         .foregroundStyle(Ink.primary)
                         .textSelection(.enabled)
@@ -335,29 +304,24 @@ struct ReasonCard: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             ForEach(review.warnings, id: \.self) { warning in
-                HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text(warning).fixedSize(horizontal: false, vertical: true)
-                }
-                .type(.callout, weight: .semibold)
-                .foregroundStyle(Ink.claim)
-                .padding(Space.s)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Ink.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Warning: \(warning)")
+                Text(warning)
+                    .type(.callout, weight: .medium)
+                    .foregroundStyle(Ink.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Warning: \(warning)")
             }
             ForEach(review.reasonPictures, id: \.self) { link in
-                HeroPicture(link: link)
+                HeroPicture(link: link).padding(.vertical, Space.xs)
             }
-            Text(clientLine(request))
-                .type(.caption)
-                .foregroundStyle(Ink.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Not verified by BOGO")
+                Text(clientLine(request))
+            }
+            .type(.caption)
+            .foregroundStyle(Ink.tertiary)
+            .padding(.top, Space.xxs)
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Ink.claimWash, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(Ink.claim.opacity(0.14), lineWidth: 0.75))
+        .accessibilityElement(children: .contain)
     }
 
     private func clientLine(_ request: ApprovalRequest) -> AttributedString {
@@ -366,7 +330,7 @@ struct ReasonCard: View {
     }
 }
 
-struct DetailsCard: View {
+struct DetailsSection: View {
     let review: Review
     let macName: String?
     let waiting: Int
@@ -377,12 +341,13 @@ struct DetailsCard: View {
         let details = review.details
         let names = Formatting.fieldNames(details + review.missing)
         VStack(alignment: .leading, spacing: 0) {
+            FieldLabel("Details").padding(.bottom, Space.xxs)
+            DetailRow(Text("Action")) { Text(Formatting.action(review)) }
             ForEach(details) { highlight in
                 if case .text(let value) = highlight.value {
                     DetailRow(Text(Formatting.visible(names[highlight.id] ?? highlight.label))) {
                         Text(Formatting.summary(value)).lineLimit(6)
                     }
-                    Hairline()
                 }
             }
             if let expires = request.expires {
@@ -393,48 +358,43 @@ struct DetailsCard: View {
                             .foregroundStyle(context.date < expires ? Ink.primary : Ink.negative)
                     }
                 }
-                Hairline()
             }
             DetailRow(Text("Requested by")) { Text(Formatting.visible(request.agentName)) }
-            Hairline()
             DetailRow(Text("Runs on")) { Text(Formatting.visible(macName ?? "Unknown Mac")) }
+            if review.image != nil {
+                DetailRow(Text("Image")) { Text("From the agent") }
+            }
             if !review.missing.isEmpty {
-                Hairline()
                 Text(Formatting.visible("Not in this request: " + review.missing.map { names[$0.id] ?? $0.label }.joined(separator: ", ")))
                     .type(.caption)
                     .foregroundStyle(Ink.secondary)
-                    .padding(.vertical, Space.s)
+                    .padding(.vertical, Space.xs)
             }
             if waiting > 1 {
-                Hairline()
                 Text("\(waiting) identical requests are waiting. Approve or Deny decides this one, the oldest.")
                     .type(.caption)
                     .foregroundStyle(Ink.secondary)
-                    .padding(.vertical, Space.s)
+                    .padding(.vertical, Space.xs)
             }
-            Hairline()
+            Hairline().padding(.top, Space.s)
             AllDetailsRow(count: review.request.arguments.map(ArgumentCount.leaves) ?? 0, action: showDetails)
         }
-        .padding(.horizontal, Space.l)
-        .padding(.vertical, Space.xxs)
-        .card(padding: 0)
     }
 }
 
 struct AllDetailsRow: View {
-    let count: Int
+    let count: Int?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Space.s) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Ink.accent)
-                Text("All details").type(.callout, weight: .semibold).foregroundStyle(Ink.accent)
+                Text("All details").type(.callout, weight: .semibold).foregroundStyle(Ink.primary)
                 Spacer()
-                Text(count == 1 ? "1 value signed" : "\(count) values signed").type(.caption).foregroundStyle(Ink.tertiary)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.tertiary)
+                if let count {
+                    Text(count == 1 ? "1 value signed" : "\(count) values signed").type(.label).foregroundStyle(Ink.tertiary)
+                }
+                Chevron()
             }
             .padding(.vertical, Space.m)
             .contentShape(Rectangle())
@@ -454,30 +414,17 @@ enum ArgumentCount {
     }
 }
 
-struct StatusBanner: View {
+/// What happened to a request that's no longer waiting, as one line of colored text.
+struct StatusLine: View {
     let text: String
     let mark: Formatting.Mark
     let pending: Bool
 
     var body: some View {
-        HStack(spacing: Space.s) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(tint)
-            Text(text).type(.callout, weight: .medium).foregroundStyle(Ink.primary)
-            Spacer(minLength: 0)
-        }
-        .padding(Space.m)
-        .background(wash, in: RoundedRectangle(cornerRadius: Radius.inner, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    private var symbol: String {
-        if pending { return "clock.badge.xmark" }
-        switch mark {
-        case .approved: return "checkmark.circle.fill"
-        case .denied: return "xmark.circle.fill"
-        case .ended: return "clock.badge.xmark"
-        case .paused: return "pause.circle.fill"
-        }
+        Text(text)
+            .type(.callout, weight: .semibold)
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var tint: Color {
@@ -488,43 +435,31 @@ struct StatusBanner: View {
         case .ended, .paused: return Ink.secondary
         }
     }
-
-    private var wash: Color {
-        if pending { return Ink.raised }
-        switch mark {
-        case .approved: return Ink.positiveWash
-        case .denied: return Ink.negativeWash
-        case .ended, .paused: return Ink.raised
-        }
-    }
 }
 
-struct UnreadableCard: View {
+struct UnreadableSection: View {
     let record: RequestRecord
     let macName: String?
-    let showDetails: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Tile(symbol: "exclamationmark.triangle.fill", size: 48, tint: Ink.claim, wash: Ink.claimWash)
-            Text("BOGO couldn’t read this request").type(.title2).foregroundStyle(Ink.primary)
+        VStack(alignment: .leading, spacing: Space.xs) {
+            Text("BOGO couldn’t read this request").type(.title).foregroundStyle(Ink.primary).accessibilityAddTraits(.isHeader)
             Text("It can’t show what this would run, so it can’t be approved. You can deny it.")
                 .type(.body)
                 .foregroundStyle(Ink.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Text("\(macName ?? "Unknown Mac") · \(record.bytes.count) bytes")
-                .type(.caption)
+                .type(.callout)
                 .foregroundStyle(Ink.tertiary)
+                .padding(.top, Space.xxs)
         }
-        .card(padding: Space.xl)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct ApprovedOverlay: View {
     let summary: ApprovedSummary
     let done: () -> Void
-    @State private var ring: CGFloat = 0
-    @State private var check: CGFloat = 0
     @State private var text = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -533,36 +468,21 @@ struct ApprovedOverlay: View {
             Ink.canvas.ignoresSafeArea()
             VStack(spacing: Space.xl) {
                 Spacer()
-                ZStack {
-                    Circle()
-                        .fill(Ink.positiveWash)
-                        .scaleEffect(ring)
-                    Circle()
-                        .trim(from: 0, to: ring)
-                        .stroke(Ink.positive, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    CheckShape()
-                        .trim(from: 0, to: check)
-                        .stroke(Ink.positive, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                        .frame(width: 46, height: 36)
-                }
-                .frame(width: 112, height: 112)
+                DoneMark(size: 88)
                 VStack(spacing: Space.xs) {
                     Text("Approved").type(.title).foregroundStyle(Ink.primary)
                     if let price = summary.price {
-                        Text(price.formatted).type(.title).monospacedDigit().foregroundStyle(Ink.primary)
+                        Text(price.formatted).type(.title2).monospacedDigit().foregroundStyle(Ink.primary)
                     }
                     Text(Formatting.visible(summary.title)).type(.body).foregroundStyle(Ink.secondary).multilineTextAlignment(.center).lineLimit(2)
-                    HStack(spacing: 6) {
-                        Image(systemName: "faceid")
-                        Text("Signed with Face ID · sent to \(summary.mac)")
-                    }
-                    .type(.caption)
-                    .foregroundStyle(Ink.tertiary)
-                    .padding(.top, Space.xs)
+                    Text("Signed with Face ID and sent to \(summary.mac)")
+                        .type(.caption)
+                        .foregroundStyle(Ink.tertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, Space.s)
                 }
                 .opacity(text ? 1 : 0)
-                .offset(y: text ? 0 : 10)
+                .offset(y: text || reduceMotion ? 0 : 8)
                 .padding(.horizontal, Space.xxl)
                 Spacer()
                 Button("Done", action: done)
@@ -575,30 +495,12 @@ struct ApprovedOverlay: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Approved")
         .onAppear {
-            if reduceMotion {
-                ring = 1
-                check = 1
-                withAnimation(Motion.fade) { text = true }
-            } else {
-                withAnimation(.easeOut(duration: 0.45)) { ring = 1 }
-                withAnimation(.easeOut(duration: 0.35).delay(0.32)) { check = 1 }
-                withAnimation(Motion.standard.delay(0.5)) { text = true }
-            }
+            withAnimation(reduceMotion ? Motion.fade : Motion.standard.delay(0.45)) { text = true }
         }
         .task {
             try? await Task.sleep(for: .seconds(2.6))
             done()
         }
-    }
-}
-
-struct CheckShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.05))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.36, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        return path
     }
 }
 
@@ -622,7 +524,7 @@ struct DenySheet: View {
                 .lineLimit(1...3)
                 .focused($focused)
                 .padding(Space.m)
-                .background(Ink.well, in: RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
+                .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field, style: .continuous))
             VStack(spacing: Space.xxs) {
                 Button("Deny request") { deny(note) }
                     .buttonStyle(DestructiveButtonStyle())
@@ -634,21 +536,9 @@ struct DenySheet: View {
         .padding(.top, Space.xxl)
         .padding(.bottom, Space.xs)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Ink.surface.ignoresSafeArea())
+        .background(Ink.canvas.ignoresSafeArea())
         .presentationDetents([.height(380), .large])
-        .presentationCornerRadius(Radius.card + 8)
+        .presentationCornerRadius(Radius.sheet)
         .presentationDragIndicator(.visible)
-    }
-}
-
-struct DestructiveButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .type(.headline)
-            .foregroundStyle(Ink.negative)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Ink.negativeWash, in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(Motion.snappy, value: configuration.isPressed)
     }
 }

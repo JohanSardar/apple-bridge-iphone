@@ -72,21 +72,21 @@ struct SettingsScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.xl) {
-                Text("Settings").type(.title).foregroundStyle(Ink.primary).padding(.top, Space.xs).accessibilityAddTraits(.isHeader)
-                group("BOGO") {
+            VStack(alignment: .leading, spacing: Space.xxl) {
+                Text("Settings").type(.title).foregroundStyle(Ink.primary).padding(.top, Space.s).accessibilityAddTraits(.isHeader)
+                RowSection("BOGO") {
                     NavigationLink { bogo.macs } label: {
-                        SettingsRow(symbol: "laptopcomputer", title: "Macs", detail: "Where your agents run")
+                        SettingsRow(title: "Macs", detail: "Where your agents run")
                     }
                 }
-                group("Apple Bridge") {
+                RowSection("Apple Bridge") {
                     NavigationLink { PairingScreen(state: pairing) } label: {
-                        SettingsRow(symbol: "link", title: "Gateway pairing", detail: pairing.status)
+                        SettingsRow(title: "Gateway pairing", detail: pairing.status)
                     }
                 }
-                group("Capabilities") {
+                RowSection("Capabilities") {
                     ForEach(Array(Capabilities.all.enumerated()), id: \.element.id) { index, capability in
-                        if index > 0 { Hairline().padding(.leading, 56) }
+                        if index > 0 { Hairline() }
                         NavigationLink {
                             if capability.id == "screentime" {
                                 ScreenTimeScreen()
@@ -94,13 +94,13 @@ struct SettingsScreen: View {
                                 CapabilityScreen(capability: capability)
                             }
                         } label: {
-                            SettingsRow(symbol: SettingsRow.symbol(capability.id), title: capability.title, detail: "\(capability.permission) · No activity")
+                            SettingsRow(title: capability.title, detail: "\(capability.permission) · No activity")
                         }
                     }
                 }
-                group("Support") {
+                RowSection("Support") {
                     NavigationLink { DiagnosticsScreen(pairing: pairing) } label: {
-                        SettingsRow(symbol: "waveform.path.ecg", title: "Diagnostics", detail: "Version, gateway and push delivery")
+                        SettingsRow(title: "Diagnostics", detail: "Version, gateway and push delivery")
                     }
                 }
                 #if DEBUG
@@ -109,7 +109,6 @@ struct SettingsScreen: View {
                 Text("Apple Bridge \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · BOGO")
                     .type(.caption)
                     .foregroundStyle(Ink.tertiary)
-                    .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, Space.gutter)
             .padding(.bottom, Space.xxl)
@@ -119,53 +118,24 @@ struct SettingsScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .statusScrim()
     }
-
-    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Eyebrow(title)
-            VStack(spacing: 0, content: content)
-                .padding(.horizontal, Space.m)
-                .card(padding: 0, radius: Radius.inner + 4)
-        }
-    }
 }
 
 struct SettingsRow: View {
-    let symbol: String
     let title: String
     let detail: String
 
     var body: some View {
         HStack(spacing: Space.s) {
-            Tile(symbol: symbol, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).type(.callout, weight: .semibold).foregroundStyle(Ink.primary)
-                Text(detail).type(.caption).foregroundStyle(Ink.secondary).lineLimit(2).multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).type(.callout, weight: .medium).foregroundStyle(Ink.primary)
+                Text(detail).type(.label).foregroundStyle(Ink.secondary).lineLimit(2).multilineTextAlignment(.leading)
             }
             Spacer(minLength: Space.xs)
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.tertiary)
+            Chevron()
         }
-        .padding(.vertical, Space.s)
+        .padding(.vertical, 14)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-    }
-
-    static func symbol(_ id: String) -> String {
-        switch id {
-        case "alarms": return "alarm"
-        case "notifications": return "bell.badge"
-        case "location": return "location"
-        case "healthread": return "heart.text.square"
-        case "healthwrite": return "heart"
-        case "motion": return "figure.walk"
-        case "device-context": return "iphone"
-        case "screentime": return "hourglass"
-        case "siri": return "mic"
-        case "widgets": return "square.grid.2x2"
-        case "capture": return "camera"
-        case "context": return "text.bubble"
-        default: return "circle.grid.2x2"
-        }
     }
 }
 
@@ -173,22 +143,15 @@ struct DiagnosticsScreen: View {
     @Bindable var pairing: PairingState
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.xxl) {
                 VStack(spacing: 0) {
                     DetailRow(Text("Version")) { Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown") }
-                    Hairline()
                     DetailRow(Text("Gateway")) { Text(pairing.status) }
-                    Hairline()
                     DetailRow(Text("Capabilities")) { Text(String(Capabilities.all.count)).monospacedDigit() }
-                    Hairline()
                     DetailRow(Text("Last command")) { Text(PushDelivery.shared.lastResult) }
-                    Hairline()
                     DetailRow(Text("Push delivery")) { Text(PushDelivery.shared.status) }
-                    Hairline()
                     DetailRow(Text("Push wakes")) { Text(String(PushDelivery.shared.wakeCount)).monospacedDigit() }
                 }
-                .padding(.horizontal, Space.l)
-                .card(padding: 0, radius: Radius.inner + 4)
                 Button("Check pending commands") { Task { await PushDelivery.shared.drain() } }
                     .buttonStyle(SecondaryButtonStyle())
             }
@@ -208,16 +171,15 @@ struct DemoControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Eyebrow("Demo · Debug builds only")
-            VStack(alignment: .leading, spacing: 0) {
+            RowSection("Demo") {
                 Toggle(isOn: $quiet) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Quiet stand-in Mac").type(.callout, weight: .semibold).foregroundStyle(Ink.primary)
-                        Text("Add Mac sends no sample requests").type(.caption).foregroundStyle(Ink.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Quiet stand-in Mac").type(.callout, weight: .medium).foregroundStyle(Ink.primary)
+                        Text("Add Mac sends no sample requests").type(.label).foregroundStyle(Ink.secondary)
                     }
                 }
                 .tint(Ink.positive)
-                .padding(.vertical, Space.s)
+                .padding(.vertical, Space.m)
                 .onChange(of: quiet) { _, value in StandInMacLink.quiet = value }
                 ForEach(DemoRequest.allCases, id: \.self) { request in
                     Hairline()
@@ -225,20 +187,17 @@ struct DemoControls: View {
                         HStack {
                             Text(request.title).type(.callout, weight: .medium).foregroundStyle(Ink.primary)
                             Spacer()
-                            Text(sent == request.rawValue ? "Arrives in 3 s" : "Send").type(.caption, weight: .semibold).foregroundStyle(Ink.accent)
+                            Text(sent == request.rawValue ? "Arrives in 3 s" : "Send").type(.label).foregroundStyle(Ink.secondary)
                         }
-                        .padding(.vertical, Space.s)
+                        .padding(.vertical, Space.m)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, Space.m)
-            .card(padding: 0, radius: Radius.inner + 4)
-            Text(bogo.standIn?.connected == true ? "Requests come from the stand-in Mac, 3 seconds after you tap." : "Add the Stand-in Mac first (BOGO → Add Mac).")
+            Text(bogo.standIn?.connected == true ? "Debug builds only. Requests come from the stand-in Mac, 3 seconds after you tap." : "Debug builds only. Add the Stand-in Mac first (BOGO → Add Mac).")
                 .type(.caption)
-                .foregroundStyle(Ink.secondary)
-                .padding(.horizontal, Space.xxs)
+                .foregroundStyle(Ink.tertiary)
         }
     }
 

@@ -118,42 +118,39 @@ final class PictureGuard: NSObject, URLSessionTaskDelegate, Sendable {
     }
 }
 
+/// The agent's picture, fitted whole and sitting straight on the page: no frame, no well, no badge.
+/// Its provenance is a plain "Image · From the agent" row in the details; tapping it shows the exact link.
 struct HeroPicture: View {
     let link: String
     @State private var pictures = Pictures.shared
     @State private var inspecting = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.inner, style: .continuous)
         let load = pictures.loads[link] ?? .loading
         Button { inspecting = true } label: {
             ZStack {
-                Ink.well
                 switch load {
                 case .loading:
-                    Color.clear.shimmering()
+                    ProgressView().tint(Ink.tertiary)
                 case .shown(let image):
                     Image(uiImage: image)
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
-                        .padding(image.hasAlpha ? Space.xxl : 0)
-                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                        .clipShape(RoundedRectangle(cornerRadius: image.hasAlpha ? 0 : Radius.picture, style: .continuous))
+                        .padding(.horizontal, image.hasAlpha ? Space.xl : 0)
+                        .transition(.opacity)
                 case .unavailable(let why):
-                    VStack(spacing: Space.xs) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 26, weight: .light))
-                            .foregroundStyle(Ink.tertiary)
-                        Text("No preview").type(.label).foregroundStyle(Ink.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No preview").type(.callout).foregroundStyle(Ink.secondary)
                         Text(why).type(.caption).foregroundStyle(Ink.tertiary)
                     }
-                    .padding(Space.l)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .aspectRatio(4 / 3, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .clipShape(shape)
-            .overlay(alignment: .topLeading) { AgentChip(text: "Agent’s picture").padding(Space.s) }
+            .frame(height: load.unavailable ? nil : 240)
+            .contentShape(Rectangle())
             .animation(Motion.gentle, value: load.shown)
         }
         .buttonStyle(PressableStyle())
@@ -165,27 +162,10 @@ struct HeroPicture: View {
 
     private func accessibility(_ load: PictureLoad) -> String {
         switch load {
-        case .loading: return "Agent’s picture, loading"
-        case .shown: return "Agent’s picture, unverified"
-        case .unavailable(let why): return "Agent’s picture can’t be shown, \(why)"
+        case .loading: return "Image from the agent, loading"
+        case .shown: return "Image from the agent, not verified"
+        case .unavailable(let why): return "Image from the agent can’t be shown, \(why)"
         }
-    }
-}
-
-struct AgentChip: View {
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "sparkle").font(.system(size: 9, weight: .bold))
-            Text(text).type(.caption, weight: .medium)
-        }
-        .foregroundStyle(Ink.primary.opacity(0.75))
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Ink.hairline, lineWidth: 0.5))
-        .accessibilityHidden(true)
     }
 }
 
@@ -195,25 +175,24 @@ struct PictureThumb: View {
     @State private var pictures = Pictures.shared
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
         ZStack {
-            Ink.well
             switch pictures.loads[link] ?? .loading {
             case .loading:
-                Color.clear.shimmering()
+                Color.clear
             case .shown(let image):
                 if image.hasAlpha {
-                    Image(uiImage: image).resizable().interpolation(.high).scaledToFit().padding(size * 0.14)
+                    Image(uiImage: image).resizable().interpolation(.high).scaledToFit().padding(size * 0.1)
                 } else {
                     Image(uiImage: image).resizable().interpolation(.high).scaledToFill().frame(width: size, height: size)
                 }
             case .unavailable:
-                Image(systemName: "photo").font(.system(size: size * 0.36, weight: .light)).foregroundStyle(Ink.tertiary)
+                Text("No preview").type(.caption).foregroundStyle(Ink.tertiary).multilineTextAlignment(.center).minimumScaleFactor(0.6)
             }
         }
         .frame(width: size, height: size)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Ink.hairline, lineWidth: 0.5))
+        .overlay(shape.strokeBorder(Ink.hairline, lineWidth: 0.75))
         .onAppear { pictures.load(link) }
         .accessibilityHidden(true)
     }
@@ -231,39 +210,33 @@ struct PictureInspector: View {
                     Group {
                         switch pictures.loads[link] ?? .loading {
                         case .shown(let image):
-                            Image(uiImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: image.hasAlpha ? 0 : Radius.tile, style: .continuous)).padding(Space.l)
+                            Image(uiImage: image).resizable().scaledToFit()
+                                .clipShape(RoundedRectangle(cornerRadius: image.hasAlpha ? 0 : Radius.picture, style: .continuous))
+                                .frame(maxHeight: 360)
                         case .loading:
                             ProgressView().frame(height: 200)
                         case .unavailable(let why):
-                            VStack(spacing: Space.xs) {
-                                Image(systemName: "photo").font(.system(size: 30, weight: .light)).foregroundStyle(Ink.tertiary)
-                                Text("Can’t preview · \(why)").type(.label).foregroundStyle(Ink.secondary)
-                            }
-                            .frame(height: 200)
+                            Text("Can’t preview · \(why)").type(.callout).foregroundStyle(Ink.secondary).frame(height: 120)
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .background(Ink.well, in: RoundedRectangle(cornerRadius: Radius.inner, style: .continuous))
                     VStack(alignment: .leading, spacing: Space.xs) {
-                        Eyebrow("Exact link in the request")
+                        FieldLabel("Exact link in the request")
                         Text(Formatting.visible(link))
                             .type(.mono)
                             .foregroundStyle(Ink.primary)
                             .textSelection(.enabled)
-                            .card(padding: Space.m, radius: Radius.inner)
                     }
-                    Label {
-                        Text("The agent sent this link. You sign the link, not the picture: BOGO didn’t check what it shows, and it can change after you approve.")
-                            .type(.callout)
-                            .foregroundStyle(Ink.secondary)
-                    } icon: {
-                        Image(systemName: "sparkle").foregroundStyle(Ink.claim)
-                    }
+                    Hairline()
+                    Text("The agent sent this link. You sign the link, not the picture: BOGO didn’t check what it shows, and it can change after you approve.")
+                        .type(.callout)
+                        .foregroundStyle(Ink.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(Space.gutter)
             }
             .canvas()
-            .navigationTitle("Agent’s picture")
+            .navigationTitle("Image from the agent")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
@@ -276,6 +249,11 @@ struct PictureInspector: View {
 extension PictureLoad {
     var shown: Bool {
         if case .shown = self { return true }
+        return false
+    }
+
+    var unavailable: Bool {
+        if case .unavailable = self { return true }
         return false
     }
 }
