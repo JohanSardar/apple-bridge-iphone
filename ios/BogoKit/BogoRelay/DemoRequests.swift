@@ -59,7 +59,7 @@ public enum DemoRequest: String, CaseIterable, Sendable {
                     ])),
                     member("name", .string("spend-request_create")),
                 ]),
-                justification: "Buying the desk toy the user picked, under their $20 budget.",
+                justification: "Buying the Rubik’s Cube the user picked for their desk.",
                 hints: [
                     Hint(path: [.key("name")], format: .text),
                     Hint(path: [.key("arguments"), .key("lineItem"), .index(0), .key("name")], format: .title),
