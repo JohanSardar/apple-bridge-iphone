@@ -18,7 +18,8 @@ public final class RelayMacLink: MacLink {
     private var mailboxes: [Data: Mailbox] = [:]
     private var macs: [Data: MacRecord] = [:]
     private var keys: [String: ChannelKeys] = [:]
-    private var candidate: (keys: ChannelKeys, client: RelayClient)?
+    private let nearby = NearbyMacs()
+    private var waiting: [String: PairCode] = [:]
 
     public init(endpoint: RelayEndpoint) {
         self.endpoint = endpoint
@@ -37,7 +38,7 @@ public final class RelayMacLink: MacLink {
         }
         for mac in relayed where mailboxes[mac.bogoID] == nil {
             guard let route = mac.route, let channel = channelKeys(route) else { continue }
-            let client = RelayClient(endpoint: endpoint, key: channel.relay)
+            let client = RelayClient(endpoint: route.relayURL.map(RelayEndpoint.init) ?? endpoint, key: channel.relay)
             let bogoID = mac.bogoID
             let task = Task { [weak self] in _ = await self?.poll(bogoID, client: client, route: route) }
             mailboxes[bogoID] = Mailbox(route: route, task: task, client: client)
@@ -64,21 +65,17 @@ public final class RelayMacLink: MacLink {
     }
 
     public func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] {
-        let browsing = candidate ?? {
-            let keys = ChannelKeys()
-            return (keys, RelayClient(endpoint: endpoint, key: keys.relay))
-        }()
-        candidate = browsing
-        guard let listed = try? await browsing.client.offers() else { return [] }
-        return listed.map { RegistrationOffer(id: Hex.string($0.offerID) + Hex.string($0.ePubM), label: $0.label,
-                                              opened: Date().addingTimeInterval(-TimeInterval($0.ageSeconds))) }
+        let found = nearby.current()
+        waiting = Dictionary(found.map { ($0.id, $0.code) }, uniquingKeysWith: { first, _ in first })
+        return found.map { RegistrationOffer(id: $0.id, label: $0.name, opened: $0.seen) }
     }
 
     public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
-        guard let browsing = candidate, let raw = Hex.data(offer.id), raw.count == 48 else { throw RegistrationError.macCancelled }
-        candidate = nil
-        let lobby = LobbyOffer(offerID: raw.prefix(16), ePubM: raw.suffix(32), label: offer.label, ageSeconds: 0)
-        return try await RelayRegistration.begin(client: browsing.client, keys: browsing.keys, offer: lobby)
+        guard let code = waiting[offer.id] else { throw RegistrationError.noMac }
+        nearby.stop()
+        let keys = ChannelKeys()
+        let client = RelayClient(endpoint: code.endpoint(publicRelay: endpoint), key: keys.relay)
+        return try await RelayRegistration.begin(client: client, keys: keys, code: code)
     }
 
     private func channelKeys(_ route: MacRoute) -> ChannelKeys? {

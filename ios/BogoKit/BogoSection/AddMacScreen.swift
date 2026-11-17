@@ -54,7 +54,7 @@ struct AddMacScreen: View {
             VStack(alignment: .leading, spacing: Space.xl) {
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text("Add a Mac").type(.title).foregroundStyle(Ink.primary)
-                    Text("On your Mac, run this command. The Mac shows up here while it waits.")
+                    Text("On your Mac, run this command. The Mac shows up here while it waits, when this iPhone is on the same network.")
                         .type(.callout)
                         .foregroundStyle(Ink.secondary)
                 }
@@ -226,6 +226,8 @@ struct AddMacScreen: View {
                 if case .compare = step { step = .compare(channel, confirmation) }
             } catch RegistrationError.tampered {
                 step = .failed("The codes couldn’t be checked safely, so nothing was added. Run `bogo approver add` again.")
+            } catch RegistrationError.noMac {
+                step = .failed("\(offer.label) is no longer waiting, or another iPhone is adding it. Run `bogo approver add` again.")
             } catch {
                 switch step {
                 case .choose, .compare: step = .failed("The Mac stopped the attempt. Run `bogo approver add` again.")

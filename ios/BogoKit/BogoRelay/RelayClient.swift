@@ -24,13 +24,6 @@ public struct RelayMessage: Sendable {
     public let body: Data
 }
 
-public struct LobbyOffer: Sendable {
-    public let offerID: Data
-    public let ePubM: Data
-    public let label: String
-    public let ageSeconds: UInt64
-}
-
 @MainActor
 public final class RelayClient {
     public let endpoint: RelayEndpoint
@@ -72,22 +65,12 @@ public final class RelayClient {
         _ = try await call("POST", "/v1/ack", ["msg_ids": msgIDs])
     }
 
-    public func offers() async throws -> [LobbyOffer] {
-        guard let list = try JSONSerialization.jsonObject(with: try await call("GET", "/v1/lobby", nil)) as? [[String: Any]] else { throw RelayError.wire }
-        return list.compactMap { item in
-            guard let id = (item["offer_id"] as? String).flatMap(Hex.data), id.count == 16,
-                  let key = (item["e_pub_m"] as? String).flatMap(Hex.data), key.count == 32,
-                  let label = item["mac_label"] as? String else { return nil }
-            return LobbyOffer(offerID: id, ePubM: key, label: label, ageSeconds: (item["age_seconds"] as? NSNumber)?.uint64Value ?? 0)
-        }
+    public func roomFetch(_ room: Data) async throws -> [RelayMessage] {
+        try messages(try await call("POST", "/v1/room/fetch", ["room": Hex.string(room)]))
     }
 
-    public func lobbySend(offer: Data, msgID: Data, body: Data) async throws {
-        _ = try await call("POST", "/v1/lobby/\(Hex.string(offer))/msg", ["msg_id": Hex.string(msgID), "body": Hex.string(body)])
-    }
-
-    public func lobbyFetch(offer: Data) async throws -> [RelayMessage] {
-        try messages(try await call("POST", "/v1/lobby/\(Hex.string(offer))/fetch", nil))
+    public func roomSend(_ room: Data, msgID: Data, body: Data) async throws {
+        _ = try await call("POST", "/v1/room/send", ["room": Hex.string(room), "msg_id": Hex.string(msgID), "body": Hex.string(body)])
     }
 
     private func messages(_ data: Data) throws -> [RelayMessage] {

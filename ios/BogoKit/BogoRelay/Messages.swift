@@ -192,12 +192,14 @@ public struct MacRoute: Equatable, Sendable {
     public let macMailbox: String
     public let txID: Data
     public let channelAccount: String
+    public let relayURL: URL?
 
-    public init(macE2E: Data, macMailbox: String, txID: Data, channelAccount: String) {
+    public init(macE2E: Data, macMailbox: String, txID: Data, channelAccount: String, relayURL: URL?) {
         self.macE2E = macE2E
         self.macMailbox = macMailbox
         self.txID = txID
         self.channelAccount = channelAccount
+        self.relayURL = relayURL
     }
 }
 
@@ -259,6 +261,7 @@ public enum Registration {
 }
 
 public enum RegistrationError: Error, Equatable {
+    case noMac
     case macCancelled
     case refused(String)
     case tampered

@@ -44,7 +44,7 @@ public final class Store {
           PRIMARY KEY (bogo_id, agent_id));
         CREATE TABLE IF NOT EXISTS inbound (bogo_id BLOB NOT NULL, msg_id BLOB NOT NULL, applied_ms INTEGER NOT NULL, PRIMARY KEY (bogo_id, msg_id));
         """)
-        try addColumns("macs", ["mac_e2e BLOB", "mac_mailbox TEXT", "tx_id BLOB", "channel_account TEXT", "push_token BLOB"])
+        try addColumns("macs", ["mac_e2e BLOB", "mac_mailbox TEXT", "tx_id BLOB", "channel_account TEXT", "push_token BLOB", "relay_url TEXT"])
         try addColumns("outbox", ["envelope BLOB"])
     }
 
@@ -68,12 +68,14 @@ public final class Store {
 
     public func macs() throws -> [MacRecord] {
         try query("""
-        SELECT bogo_id, name, key_account, public_key, approver_id, biometry, state, added_ms, boot_seq, mac_e2e, mac_mailbox, tx_id, channel_account, push_token
+        SELECT bogo_id, name, key_account, public_key, approver_id, biometry, state, added_ms, boot_seq, mac_e2e, mac_mailbox, tx_id, channel_account, push_token,
+          relay_url
         FROM macs ORDER BY added_ms
         """) { row in
             var route: MacRoute?
             if let macE2E = row.optionalData(9), let mailbox = row.optionalText(10), let txID = row.optionalData(11), let account = row.optionalText(12) {
-                route = MacRoute(macE2E: macE2E, macMailbox: mailbox, txID: txID, channelAccount: account)
+                route = MacRoute(macE2E: macE2E, macMailbox: mailbox, txID: txID, channelAccount: account,
+                                 relayURL: row.optionalText(14).flatMap(URL.init(string:)))
             }
             return MacRecord(bogoID: row.data(0), name: row.text(1), keyAccount: row.text(2), approvalPublicKey: row.data(3), approverID: row.optionalData(4),
                              biometryState: row.optionalData(5), state: MacState(rawValue: row.text(6)) ?? .removed, addedMs: row.u64(7), bootSeq: row.u64(8),
@@ -84,11 +86,12 @@ public final class Store {
     public func save(_ mac: MacRecord) throws {
         try run("""
         INSERT OR REPLACE INTO macs (bogo_id, name, key_account, public_key, approver_id, biometry, state, added_ms, boot_seq,
-          mac_e2e, mac_mailbox, tx_id, channel_account, push_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          mac_e2e, mac_mailbox, tx_id, channel_account, push_token, relay_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [.data(mac.bogoID), .text(mac.name), .text(mac.keyAccount), .data(mac.approvalPublicKey),
             mac.approverID.map(Value.data) ?? .null, mac.biometryState.map(Value.data) ?? .null, .text(mac.state.rawValue), .int(mac.addedMs), .int(mac.bootSeq),
             mac.route.map { .data($0.macE2E) } ?? .null, mac.route.map { .text($0.macMailbox) } ?? .null, mac.route.map { .data($0.txID) } ?? .null,
-            mac.route.map { .text($0.channelAccount) } ?? .null, mac.pushToken.map(Value.data) ?? .null])
+            mac.route.map { .text($0.channelAccount) } ?? .null, mac.pushToken.map(Value.data) ?? .null,
+            mac.route?.relayURL.map { .text($0.absoluteString) } ?? .null])
     }
 
     public func applied(bogoID: Data, msgID: Data) -> Bool {

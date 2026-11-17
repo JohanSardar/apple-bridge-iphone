@@ -12,7 +12,7 @@ PROOFS = [
     ('vectors', 'BogoModel', 'BogoVectorsProof.swift', [str(VECTORS)], f"PASS {counts['requests']} requests, {counts['decode_reject']} rejects, 3 reviews"),
     ('review-exact-key', 'BogoModel', 'BogoReviewExactKeyProof.swift', [], ''),
     ('reason-picture', 'BogoModel', 'BogoReasonPictureProof.swift', [], 'PASS S1'),
-    ('closed-lobby', 'BogoRelay', 'BogoClosedLobbyProof.swift', [], 'PASS'),
+    ('closed-room', 'BogoRelay', 'BogoClosedRoomProof.swift', [], 'PASS'),
     ('early-sync', 'BogoRelay', 'BogoEarlySyncProof.swift', [], 'PASS'),
     ('retry-sync', 'BogoRelay', 'BogoRetrySyncProof.swift', [], 'PASS'),
     ('reconciliation', 'BogoRelay', 'BogoReconciliationProof.swift', [], ''),

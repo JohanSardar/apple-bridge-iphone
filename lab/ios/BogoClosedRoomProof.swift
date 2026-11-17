@@ -4,9 +4,10 @@ import CryptoKit
 import Foundation
 import ObjectiveC
 
-final class LobbyFixture: @unchecked Sendable {
+final class RoomFixture: @unchecked Sendable {
     let lock = NSLock()
-    let offer = Data(repeating: 1, count: 16)
+    let code = PairCode("bogo1-aaaa-bbbb-cccc-dddd-eeee-ffff")!
+    var offer: Data { code.room }
     let mac = Curve25519.KeyAgreement.PrivateKey()
     let nM = Data(repeating: 2, count: 16)
     var ePubP = Data()
@@ -33,21 +34,22 @@ final class LobbyFixture: @unchecked Sendable {
             return (200, ["challenge": Hex.string(Data(repeating: 3, count: 32))])
         }
         if path == "/v1/auth/verify" { return (200, ["token": "test"]) }
-        if path.hasSuffix("/msg") {
-            let body = Hex.data(fields["body"] as! String)!
-            switch body.first! {
-            case RegWire.hello: ePubP = Data(body.dropFirst())
-            case RegWire.phoneNonce: nP = Data(body.dropFirst())
+        if path == "/v1/room/send" {
+            let (phase, payload) = RegWire.openRoom(Hex.data(fields["body"] as! String)!, key: code.roomKey, room: offer)!
+            switch phase {
+            case RegWire.hello: ePubP = payload
+            case RegWire.phoneNonce: nP = payload
             case RegWire.regSubmit: submitted = true
             default: break
             }
             return (200, [:])
         }
-        if path.hasSuffix("/fetch") {
+        if path == "/v1/room/fetch" {
             if submitted { return (404, [:]) }
             let ePubM = mac.publicKey.rawRepresentation
+            var phases: [(UInt8, Data)] = [(RegWire.macOffer, ePubM)]
             let commit = RegWire.commitment(ePubM: ePubM, ePubP: ePubP, nM: nM)
-            var phases: [(UInt8, Data)] = [(RegWire.commit, commit)]
+            if !ePubP.isEmpty { phases.append((RegWire.commit, commit)) }
             if !nP.isEmpty {
                 let th = RegWire.transcriptHash(
                     offer: offer, ePubM: ePubM, ePubP: ePubP,
@@ -71,11 +73,11 @@ final class LobbyFixture: @unchecked Sendable {
                 )
                 phases += [(RegWire.reveal, nM), (RegWire.macConfirmed, sealed)]
             }
-            return (200, phases.map { phase, payload in
+            return (200, try phases.map { phase, payload in
                 [
                     "msg_id": Hex.string(RegWire.msgID(offer: offer, phase: phase)),
                     "from": "mac",
-                    "body": Hex.string(Data([phase]) + payload)
+                    "body": Hex.string(try RegWire.sealRoom(payload, key: code.roomKey, room: offer, phase: phase))
                 ]
             })
         }
@@ -83,8 +85,8 @@ final class LobbyFixture: @unchecked Sendable {
     }
 }
 
-final class LobbyProtocol: URLProtocol, @unchecked Sendable {
-    static let fixture = LobbyFixture()
+final class RoomProtocol: URLProtocol, @unchecked Sendable {
+    static let fixture = RoomFixture()
 
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "proof.invalid"
@@ -117,13 +119,13 @@ final class LobbyProtocol: URLProtocol, @unchecked Sendable {
 extension URLSessionConfiguration {
     @objc class func proofEphemeral() -> URLSessionConfiguration {
         let config = proofEphemeral()
-        config.protocolClasses = [LobbyProtocol.self]
+        config.protocolClasses = [RoomProtocol.self]
         return config
     }
 }
 
 @main
-enum ClosedLobbyProof {
+enum ClosedRoomProof {
     @MainActor
     static func main() async throws {
         let original = class_getClassMethod(
@@ -137,19 +139,14 @@ enum ClosedLobbyProof {
         method_exchangeImplementations(original, replacement)
         defer { method_exchangeImplementations(original, replacement) }
 
-        let fixture = LobbyProtocol.fixture
+        let fixture = RoomProtocol.fixture
         let keys = ChannelKeys()
         let client = RelayClient(
             endpoint: RelayEndpoint(url: URL(string: "https://proof.invalid")!),
             key: keys.relay
         )
-        let offer = LobbyOffer(
-            offerID: fixture.offer,
-            ePubM: fixture.mac.publicKey.rawRepresentation,
-            label: "Mac", ageSeconds: 0
-        )
         let channel = try await RelayRegistration.begin(
-            client: client, keys: keys, offer: offer
+            client: client, keys: keys, code: fixture.code
         )
         _ = try await channel.macConfirmation()
         do {
@@ -161,7 +158,7 @@ enum ClosedLobbyProof {
         } catch RegistrationError.unanswered {
             print("PASS")
         } catch {
-            print("FAIL S1: lobby closed after REG_SUBMIT; expected unanswered to preserve recovery, got \(error)")
+            print("FAIL S1: room closed after REG_SUBMIT; expected unanswered to preserve recovery, got \(error)")
             exit(1)
         }
     }
