@@ -21,7 +21,9 @@ struct SlideToApprove: View {
             let travel = max(1, proxy.size.width - knob - inset * 2)
             let progress = min(1, offset / travel)
             ZStack(alignment: .leading) {
-                Capsule().fill(Ink.primary)
+                Capsule()
+                    .fill(armed || busy ? Ink.primary : Ink.well)
+                    .overlay(Capsule().strokeBorder(Ink.hairline, lineWidth: armed || busy ? 0 : 1))
                 Capsule()
                     .fill(Ink.inverse.opacity(0.14 * Double(progress)))
                     .frame(width: knob + inset * 2 + offset)
@@ -37,7 +39,6 @@ struct SlideToApprove: View {
             .frame(height: height)
         }
         .frame(height: height)
-        .opacity(armed || busy ? 1 : 0.55)
         .animation(Motion.respecting(reduceMotion, Motion.standard), value: armed)
         .onAppear(perform: startArming)
         .onChange(of: armed) { _, now in
@@ -63,7 +64,7 @@ struct SlideToApprove: View {
         let text = busy ? "Confirm with Face ID" : armed ? "Slide to approve" : "Read it first"
         Text(text)
             .type(.headline)
-            .foregroundStyle(Ink.inverse.opacity(armed || busy ? 0.92 : 0.6))
+            .foregroundStyle(armed || busy ? Ink.inverse.opacity(0.92) : Ink.secondary)
             .overlay {
                 if armed && !busy && !reduceMotion {
                     Text(text)
@@ -78,7 +79,9 @@ struct SlideToApprove: View {
 
     private func knobView(size: CGFloat) -> some View {
         ZStack {
-            Circle().fill(Ink.inverse)
+            Circle()
+                .fill(armed || busy ? Ink.inverse : Ink.surface)
+                .overlay(Circle().strokeBorder(Ink.hairline, lineWidth: armed || busy ? 0 : 1))
             if !armed && !busy {
                 Circle()
                     .trim(from: 0, to: armProgress)
