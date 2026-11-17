@@ -5,7 +5,7 @@ struct ShellProof {
     @MainActor
     static func main() async throws {
         var checks: [String: Bool] = [:]
-        checks["tab_structure"] = ShellModel.tabs.map(\.rawValue) == ["settings", "bogo", "diagnostics"] && ShellModel.tabs.map(\.title) == ["Settings", "BOGO", "Diagnostics"] && Set(ShellModel.tabs.map(\.symbol)).count == 3
+        checks["tab_structure"] = ShellModel.tabs.map(\.rawValue) == ["bogo", "activity", "settings"] && ShellModel.tabs.map(\.title) == ["BOGO", "Activity", "Settings"] && Set(ShellModel.tabs.map(\.symbol)).count == 3
         var online = true
         var failPair = false
         var requests = 0

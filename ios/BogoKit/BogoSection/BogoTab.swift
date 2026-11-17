@@ -2,33 +2,22 @@ import BogoModel
 import BogoRelay
 import SwiftUI
 
-struct BogoTab: View {
+struct BogoHome: View {
     @Bindable var section: BogoSection
     @Environment(\.scenePhase) private var scenePhase
     @State private var addingMac = false
+    @Namespace private var zoom
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch section.page {
-                case .inbox: InboxScreen(section: section, addMac: { addingMac = true })
-                case .history: HistoryScreen(approver: section.approver)
-                case .macs: MacsScreen(approver: section.approver, addMac: { addingMac = true })
+            HomeScreen(section: section, zoom: zoom, addMac: { addingMac = true })
+                .navigationDestination(item: $section.reviewing) { id in
+                    ReviewScreen(approver: section.approver, id: id)
+                        .navigationTransition(.zoom(sourceID: id, in: zoom))
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("Section", selection: $section.page) {
-                        ForEach(BogoPage.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 260)
+                .navigationDestination(for: MacsRoute.self) { _ in
+                    MacsScreen(approver: section.approver, addMac: { addingMac = true })
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(item: $section.reviewing) { id in
-                ReviewScreen(approver: section.approver, id: id)
-            }
         }
         .sheet(isPresented: $addingMac) {
             AddMacScreen(approver: section.approver)
@@ -40,126 +29,310 @@ struct BogoTab: View {
     }
 }
 
-struct InboxScreen: View {
+struct MacsRoute: Hashable {}
+
+struct HomeScreen: View {
     @Bindable var section: BogoSection
+    let zoom: Namespace.ID
     let addMac: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let approver = section.approver
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let now = UInt64(context.date.timeIntervalSince1970 * 1000)
-            let entries = Inbox.entries(approver.shown, now: now)
-            let live = entries.filter(\.live)
-            let ended = entries.filter { !$0.live }
-            let stale = approver.macs.filter { $0.state == .needsReRegistration }
-            List {
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let entries = Inbox.entries(approver.shown, now: now)
+        let live = entries.filter(\.live)
+        let ended = entries.filter { !$0.live }
+        let stale = approver.macs.filter { $0.state == .needsReRegistration }
+        let connected = approver.macs.contains { $0.state == .active }
+        let recent = Array(Inbox.history(approver.shown).prefix(3))
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                HomeHeader(approver: approver, waiting: live.count)
                 ForEach(stale) { mac in
-                    Section {
-                        Button(action: addMac) {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Add \(mac.name) again")
-                                    Text("Face ID changed, so approvals from this iPhone stopped working.")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "faceid").foregroundStyle(.orange)
+                    Button(action: addMac) {
+                        HStack(spacing: Space.m) {
+                            Tile(symbol: "faceid", size: 44, tint: Ink.claim, wash: Ink.claimWash)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Add \(mac.name) again").type(.headline).foregroundStyle(Ink.primary)
+                                Text("Face ID changed, so approvals from this iPhone stopped working.")
+                                    .type(.label)
+                                    .foregroundStyle(Ink.secondary)
+                                    .multilineTextAlignment(.leading)
                             }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Ink.tertiary)
                         }
+                        .card(padding: Space.m)
                     }
+                    .buttonStyle(PressableStyle())
                 }
                 if !live.isEmpty {
-                    Section {
+                    VStack(spacing: Space.m) {
                         ForEach(live) { entry in
                             Button { section.reviewing = entry.primary.id } label: {
-                                InboxRow(entry: entry, approver: approver, now: now)
+                                PendingCard(entry: entry, approver: approver)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableStyle())
+                            .matchedTransitionSource(id: entry.primary.id, in: zoom)
+                            .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity.combined(with: .scale(scale: 0.96))))
                         }
                     }
+                } else if stale.isEmpty {
+                    EmptyHome(connected: connected, addMac: addMac)
+                        .transition(.opacity)
                 }
                 if !ended.isEmpty {
-                    Section("Ended") {
-                        ForEach(ended) { entry in
-                            Button { section.reviewing = entry.primary.id } label: {
-                                InboxRow(entry: entry, approver: approver, now: now)
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Eyebrow("Ended")
+                        VStack(spacing: 0) {
+                            ForEach(Array(ended.enumerated()), id: \.element.id) { index, entry in
+                                if index > 0 { Hairline().padding(.leading, 60) }
+                                Button { section.reviewing = entry.primary.id } label: {
+                                    ActivityRow(record: entry.primary, approver: approver, ended: true)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, Space.m)
+                        .card(padding: 0, radius: Radius.inner + 4)
+                    }
+                }
+                if !recent.isEmpty {
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Eyebrow("Recent")
+                        VStack(spacing: 0) {
+                            ForEach(Array(recent.enumerated()), id: \.element.id) { index, record in
+                                if index > 0 { Hairline().padding(.leading, 60) }
+                                Button { section.reviewing = record.id } label: {
+                                    ActivityRow(record: record, approver: approver, ended: false)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, Space.m)
+                        .card(padding: 0, radius: Radius.inner + 4)
                     }
                 }
             }
-            .overlay {
-                if entries.isEmpty && stale.isEmpty {
-                    if approver.macs.contains(where: { $0.state == .active }) {
-                        ContentUnavailableView("No Requests", systemImage: "checkmark.shield",
-                                               description: Text("When an agent wants to run a protected tool, it waits here for you."))
-                    } else {
-                        ContentUnavailableView {
-                            Label("Add a Mac", systemImage: "macbook")
-                        } description: {
-                            Text("Connect the Mac that runs BOGO. Its agents ask you here before a protected tool runs.")
-                        } actions: {
-                            Button("Add Mac", action: addMac).buttonStyle(.borderedProminent)
-                        }
-                    }
-                }
-            }
+            .padding(.horizontal, Space.gutter)
+            .padding(.bottom, Space.xxl)
+            .animation(Motion.respecting(reduceMotion, Motion.standard), value: live.map(\.id))
         }
+        .scrollIndicators(.hidden)
+        .canvas()
         .refreshable { await section.sceneBecameActive() }
+        .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: live.map(\.id)) { old, new in
+            if new.count > old.count { Haptics.soft() }
+        }
     }
 }
 
-struct InboxRow: View {
+struct HomeHeader: View {
+    let approver: PhoneApprover
+    let waiting: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.l) {
+            HStack(alignment: .center) {
+                HStack(spacing: Space.xs) {
+                    BogoMark(size: 26)
+                    Text("BOGO").type(.headline).tracking(1.2).foregroundStyle(Ink.primary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("BOGO")
+                Spacer()
+                NavigationLink(value: MacsRoute()) { MacChip(macs: approver.macs) }
+                    .buttonStyle(PressableStyle())
+            }
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                Text(headline)
+                    .type(.title)
+                    .foregroundStyle(Ink.primary)
+                    .contentTransition(.numericText())
+                    .accessibilityAddTraits(.isHeader)
+                Text(subhead).type(.callout).foregroundStyle(Ink.secondary)
+            }
+        }
+        .padding(.top, Space.xs)
+        .animation(Motion.standard, value: waiting)
+    }
+
+    private var headline: String {
+        switch waiting {
+        case 0: return "All clear"
+        case 1: return "1 request waiting"
+        default: return "\(waiting) requests waiting"
+        }
+    }
+
+    private var subhead: String {
+        if waiting > 0 { return "Nothing runs until you approve." }
+        return approver.macs.contains { $0.state == .active } ? "Your agents haven’t asked for anything." : "Connect a Mac to get started."
+    }
+}
+
+struct MacChip: View {
+    let macs: [MacRecord]
+
+    var body: some View {
+        let active = macs.filter { $0.state == .active }
+        HStack(spacing: 7) {
+            if active.isEmpty {
+                Image(systemName: "laptopcomputer").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.secondary)
+            } else {
+                StatusDot(Ink.positive)
+            }
+            Text(label(active)).type(.label, weight: .medium).foregroundStyle(Ink.primary).lineLimit(1)
+            Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Ink.tertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Ink.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Ink.hairline, lineWidth: 0.75))
+        .accessibilityLabel(active.isEmpty ? "Macs, none connected" : "Macs, \(label(active)) connected")
+    }
+
+    private func label(_ active: [MacRecord]) -> String {
+        if active.isEmpty { return "No Mac" }
+        return active.count == 1 ? active[0].name : "\(active.count) Macs"
+    }
+}
+
+struct PendingCard: View {
     let entry: InboxEntry
     let approver: PhoneApprover
-    let now: UInt64
 
     var body: some View {
         let record = entry.primary
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .firstTextBaseline) {
-                if let request = record.request {
-                    Text(Formatting.row(Review(request)).headline)
-                        .font(.headline)
-                        .lineLimit(1)
-                } else {
-                    Text("Unreadable request").font(.headline)
+        VStack(alignment: .leading, spacing: Space.m) {
+            if let request = record.request {
+                let review = Review(request)
+                HStack(spacing: Space.xs) {
+                    Monogram(request.agentName, size: 20)
+                    Text(Formatting.visible(request.agentName)).type(.label, weight: .semibold).foregroundStyle(Ink.primary).lineLimit(1)
+                    Text("· " + Formatting.ago(record.receivedMs)).type(.label).foregroundStyle(Ink.tertiary).lineLimit(1)
+                    Spacer(minLength: Space.xs)
+                    if entry.count > 1 {
+                        Text("×\(entry.count)")
+                            .type(.caption, weight: .semibold)
+                            .monospacedDigit()
+                            .foregroundStyle(Ink.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Ink.raised, in: Capsule())
+                            .accessibilityLabel("\(entry.count) identical requests")
+                    }
+                    if let expires = request.expires {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Label(Formatting.remaining(expires, now: context.date), systemImage: "timer")
+                                .type(.caption, weight: .semibold)
+                                .monospacedDigit()
+                                .foregroundStyle(Ink.claim)
+                        }
+                    }
                 }
-                if entry.count > 1 {
-                    Text("×\(entry.count)")
-                        .font(.subheadline.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("\(entry.count) identical requests")
+                HStack(alignment: .center, spacing: Space.m) {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(Formatting.visible(review.title))
+                            .type(.headline)
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(Ink.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Text(review.subtitle.map { Formatting.visible($0) } ?? Formatting.via(review))
+                            .type(.label)
+                            .foregroundStyle(Ink.secondary)
+                            .lineLimit(1)
+                        if let price = review.price, case .money(let amount, _) = price.value {
+                            Text(amount.formatted)
+                                .type(.title2)
+                                .monospacedDigit()
+                                .foregroundStyle(Ink.primary)
+                                .padding(.top, Space.xxs)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if let image = review.image {
+                        PictureThumb(link: image, size: 76)
+                    } else {
+                        Tile(symbol: Formatting.symbol(review), size: 52)
+                    }
                 }
-                Spacer(minLength: 8)
-                Text(Formatting.when(Date(timeIntervalSince1970: TimeInterval(entry.records.map(\.receivedMs).max() ?? 0) / 1000)))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if !review.warnings.isEmpty {
+                    Label("Reason mentions a different amount", systemImage: "exclamationmark.triangle.fill")
+                        .type(.label, weight: .semibold)
+                        .foregroundStyle(Ink.claim)
+                }
+            } else {
+                HStack(spacing: Space.m) {
+                    Tile(symbol: "exclamationmark.triangle.fill", size: 52, tint: Ink.claim, wash: Ink.claimWash)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Unreadable request").type(.headline).foregroundStyle(Ink.primary)
+                        Text((approver.mac(record.bogoID)?.name ?? "Unknown Mac") + " · can’t be approved").type(.label).foregroundStyle(Ink.secondary)
+                    }
+                }
             }
-            Group {
-                if let request = record.request {
-                    Text(detail(request))
-                } else {
-                    Text((approver.mac(record.bogoID)?.name ?? "Unknown Mac") + " · Can’t be approved")
-                }
+            HStack {
+                Text("Review").type(.label, weight: .semibold).foregroundStyle(Ink.inverse)
+                Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Ink.inverse)
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            if !entry.live, let status = Formatting.status(record, now: now) {
-                Text(status)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .frame(height: 36)
+            .background(Ink.primary, in: Capsule())
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityHidden(true)
+        }
+        .card()
+        .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the request to approve or deny")
+    }
+}
+
+struct EmptyHome: View {
+    let connected: Bool
+    let addMac: () -> Void
+    @State private var breathe = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: Space.xl) {
+            ZStack {
+                ForEach(0..<3) { ring in
+                    Circle()
+                        .strokeBorder(Ink.primary.opacity(0.06 - Double(ring) * 0.015), lineWidth: 1)
+                        .frame(width: 96 + CGFloat(ring) * 52, height: 96 + CGFloat(ring) * 52)
+                        .scaleEffect(breathe ? 1.03 : 0.98)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 3.2).repeatForever().delay(Double(ring) * 0.3), value: breathe)
+                }
+                Circle().fill(Ink.surface).frame(width: 88, height: 88).shadow(color: Ink.shadow, radius: 14, y: 6)
+                Image(systemName: connected ? "checkmark.shield" : "laptopcomputer.and.iphone")
+                    .font(.system(size: 30, weight: .regular))
+                    .foregroundStyle(Ink.primary)
+            }
+            .frame(height: 210)
+            .accessibilityHidden(true)
+            VStack(spacing: Space.xs) {
+                Text(connected ? "Nothing needs you" : "Connect your Mac")
+                    .type(.title2)
+                    .foregroundStyle(Ink.primary)
+                Text(connected ? "When an agent wants to spend money or act for you, it asks here first."
+                     : "Agents on your Mac ask this iPhone before a protected tool runs. Run bogo approver add on the Mac to begin.")
+                    .type(.callout)
+                    .foregroundStyle(Ink.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
+            if !connected {
+                Button("Add Mac", action: addMac)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .frame(maxWidth: 240)
             }
         }
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
-        .opacity(entry.live ? 1 : 0.45)
-    }
-
-    private func detail(_ request: ApprovalRequest) -> AttributedString {
-        Formatting.row(Review(request)).detail
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Space.xxl)
+        .onAppear { breathe = true }
     }
 }

@@ -1,21 +1,21 @@
 import Foundation
 
 enum ShellTab: String, CaseIterable, Identifiable {
-    case settings, bogo, diagnostics
+    case bogo, activity, settings
 
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .settings: return "Settings"
         case .bogo: return "BOGO"
-        case .diagnostics: return "Diagnostics"
+        case .activity: return "Activity"
+        case .settings: return "Settings"
         }
     }
     var symbol: String {
         switch self {
-        case .settings: return "gearshape"
         case .bogo: return "checkmark.shield"
-        case .diagnostics: return "waveform.path.ecg"
+        case .activity: return "clock.arrow.circlepath"
+        case .settings: return "gearshape"
         }
     }
 }

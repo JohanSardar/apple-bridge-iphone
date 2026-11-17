@@ -2,6 +2,7 @@ import Foundation
 import FamilyControls
 import DeviceActivity
 import SwiftUI
+import BogoSection
 
 @MainActor
 enum ScreenTimeCapability {
@@ -99,6 +100,7 @@ struct ScreenTimeScreen: View {
             }
             Text("Only Bridge shields and schedules are changed. Usage stays in this report.")
         }
+        .bogoList()
         .navigationTitle("Screen Time")
         .familyActivityPicker(isPresented: $picker, selection: $selection)
         .onChange(of: selection) { _, value in ScreenTimeState.selection = value }
