@@ -177,7 +177,7 @@ final class ShellDeliveryQualification {
                 guard center.authorizationStatus == .authorized, center.focusStatus.isFocused == false else { throw IdentityError.requestFailed }
                 receipt?.checks["ready"] = true
                 try save()
-                instruction = "Waiting for the Pro to enable and restore Do Not Disturb."
+                instruction = "Waiting for the helper Mac to enable and restore Do Not Disturb."
                 let enabled = await QualificationWait.until { center.focusStatus.isFocused == true }
                 receipt?.checks["phone_focus_enabled"] = enabled
                 try save()

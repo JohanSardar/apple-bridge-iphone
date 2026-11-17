@@ -1,10 +1,68 @@
 # iPhone app guide
 
-Build commands run from the root of `apple-bridge-iphone`. Gateway scenario commands run from the separate `apple-bridge` checkout with `APPLE_BRIDGE_IPHONE_ROOT` pointing here.
+Commands run from the root of this repository. Gateway scenario commands run from a checkout of [the Mac repository](https://github.com/JohanSardar/apple-bridge) with `APPLE_BRIDGE_IPHONE_ROOT` pointing here.
 
-Requires Xcode 26.4+, XcodeGen (`brew install xcodegen`), an Apple Development signing identity and a matching development profile at `~/.config/apple-bridge/ios/dev.mobileprovision`.
+## Build and run in the Simulator
 
-Run `packaging/dev/build-ios.sh`, then `packaging/dev/install-ios.sh`. The installer copies only our IPA to the Air and installs over USB with pymobiledevice3. Build products and generated Xcode projects are ignored. Override the profile with `APPLE_BRIDGE_IOS_PROFILE` or output directory with `APPLE_BRIDGE_IOS_OUTPUT`.
+You need a Mac with Xcode 26.4 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). You don't need an Apple developer account, a team ID, a signing certificate or an iPhone.
+
+```sh
+git clone https://github.com/JohanSardar/apple-bridge-iphone.git
+cd apple-bridge-iphone
+make simulator
+```
+
+`make simulator` generates `ios/AppleBridge.xcodeproj` and builds the app and its extensions for the Simulator without signing. To run that build, boot any iPhone from `xcrun simctl list devices available`, then install and launch it:
+
+```sh
+xcrun simctl boot "iPhone 17"
+open -a Simulator
+xcrun simctl install booted .build/ios/Simulator/Build/Products/Debug-iphonesimulator/AppleBridge.app
+xcrun simctl launch booted com.johansardar.applebridge.ios
+```
+
+To work in Xcode instead, run `make project`, open `ios/AppleBridge.xcodeproj`, choose the AppleBridge scheme and an iPhone simulator, and press Run. Xcode signs Simulator builds locally, so the team in the project doesn't matter there. Run `make project` again after adding or moving files; the generated project is not tracked.
+
+To try BOGO without a Mac, use the stand-in Mac that Debug builds include. Choose Features → Face ID → Enrolled in the Simulator's menu. In the app, open BOGO → Add Mac, add the stand-in Mac and confirm with Features → Face ID → Matching Face. Then open Settings → Demo and tap Send next to a request. It arrives on the Review card three seconds later; slide to approve and match the face again.
+
+## Checks
+
+```sh
+make lint
+make test
+```
+
+`make lint` parses every Swift, Python and shell file and rejects code comments. `make test` needs no iPhone, network or permission prompt. It compiles production Swift with fake adapters and runs:
+
+- the pairing proof and eleven Apple Bridge model proofs;
+- the BOGO proofs in `packaging/dev/check-bogo.py`, which build `BogoModel`, `BogoCrypto` and `BogoRelay` for the Mac. They decode every request vector in `ios/BogoKit/BogoRelay/StandInVectors` and refuse every rejected one, check the amounts and mismatch warnings on the Review card, and run the relay registration and decision-sync logic against fake relays and Macs;
+- the Python tests for the release and real-device tooling.
+
+Every pull request runs `make lint`, `make test`, `make simulator` and an unsigned Release build for iPhone on GitHub's hosted macOS runners ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
+
+## Signing with your own team
+
+The development team comes from `ios/Signing.xcconfig`. To use your own without editing it, put yours in the git-ignored `ios/Local.xcconfig`, then regenerate the project:
+
+```sh
+echo 'DEVELOPMENT_TEAM = ABCDE12345' > ios/Local.xcconfig
+make project
+```
+
+The bundle IDs, App Groups and provisioning profile names belong to the maintainer's team. A device build under another team also needs its own App IDs and profiles for the app and each extension.
+
+## Versions
+
+- The marketing version is `MAJOR.MINOR.PATCH`. MAJOR stays 0 while the app is only on TestFlight. Raise MINOR, and reset PATCH to 0, when an upload adds or changes something a user can see. An upload that only fixes things keeps the marketing version and raises only the build number, because each new marketing version waits for a new Beta App Review. PATCH is for fixes to a version already released on the App Store.
+- The build number is one integer for the whole app. Raise it by one for every upload and never reuse or reset it, including when the marketing version changes. App Store Connect refuses a number it has already seen.
+- `ios/project.yml` keeps `0.1` and `1` for local builds. The release script stamps the real numbers into the archive with `--version` and `--build`.
+- Tag the commit of every uploaded build `v<version>+<build>`, for example `v0.1.2+5`, and push the tag. The tag is the record of what each TestFlight build contains.
+
+The release steps are in [docs/release.md](../docs/release.md).
+
+## Device builds
+
+A signed development build needs an Apple Development identity and the development profiles for the app and each extension, saved as `~/.config/apple-bridge/ios/dev.mobileprovision`, `alarms.mobileprovision`, `ScreenTimeMonitor.mobileprovision`, `ScreenTimeReport.mobileprovision` and `BridgeWidgets.mobileprovision`. Run `make build`. It writes `.build/ios/AppleBridge.ipa`. Override the main and alarm profiles with `APPLE_BRIDGE_IOS_PROFILE` and `APPLE_BRIDGE_ALARM_PROFILE`, or the output directory with `APPLE_BRIDGE_IOS_OUTPUT`. `packaging/dev/install-ios.sh` copies the IPA to the Mac the iPhone is plugged into (`APPLE_BRIDGE_INSTALL_HOST`, an ssh host) and installs it over USB with pymobiledevice3, which must be on that Mac's PATH or in its `~/.local/bin`. Build products and generated Xcode projects are ignored.
 
 The app uses manual signing. Extension targets (widgets, App Intents and AlarmKit features) must use their own matching provisioning profiles before embedding. The current profile has no App Group identifiers; shared containers must be provisioned before use. App Intents and AlarmKit can also be implemented in the main app target.
 
@@ -22,11 +80,11 @@ A pairing code carries the Mac's signing key. The app refuses a remote code with
 
 Remote pairing validates the relay’s normal HTTPS certificate. Direct test HTTPS pins the certificate fingerprint in the QR. The replication mTLS port is not an iPhone endpoint. For isolated testing, `APPLE_BRIDGE_SECRET_STORE=file go run ./lab/iphonegateway -home /tmp/ab-test-iphone -address https://<reachable-host>:17781` writes a private code file and serves an iOS-compatible TLS certificate. `--pair-code <code>` is an app launch seam for unattended lab pairing; do not put the code in evidence.
 
-APP-PAIR-SIM runs with `APPLE_BRIDGE_SECRET_STORE=file go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-PAIR-SIM.yaml --level sim`. Physical QR/local-network permission prompts require Johan’s Allow tap.
+APP-PAIR-SIM runs with `APPLE_BRIDGE_SECRET_STORE=file go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-PAIR-SIM.yaml --level sim`. Physical QR/local-network permission prompts need an Allow tap on the phone.
 
 Delivery: the relay runs with `-apns-key <private-p8-path>` and `-apns-sandbox=true` for the development profile (`false` for production). Team, key ID and topic are fixed to the provisioned app. The gateway uses its existing private relay identity to authenticate `/iphone/push`; only signed ciphertext reaches the relay/APNs. Keys and APNs tokens must never be committed.
 
-The app registers for silent pushes at launch; silent delivery does not need notification-alert permission. Pairing/local-network/camera prompts still need Johan. APNs background delivery is best effort, so the locked-phone under-five-second scenario must be measured on hardware and is not a latency guarantee. No production relay deployment is performed by these tickets.
+The app registers for silent pushes at launch; silent delivery does not need notification-alert permission. Pairing/local-network/camera prompts still need a tap on the phone. APNs background delivery is best effort, so the locked-phone under-five-second scenario must be measured on hardware and is not a latency guarantee. No production relay deployment is performed by these tickets.
 
 `iphone.ping` takes `{"device_id":"iphone:…"}` inside the normal command envelope. Commands use the existing ledger, grants and owner approval. Admitted jobs survive restart; signed, encrypted jobs are dispatched on push or fetch. Expiry after possible dispatch is indeterminate. Device-only receipts prevent rerunning an ambiguous operation and retain signed results for upload after reconnecting.
 
@@ -59,7 +117,7 @@ App Intents live beside each capability's handlers in `<Capability>Intents.swift
 
 Each folder registers its actions by defining concrete App Intent types; no central intent list is required. `BridgeShortcuts` in the Siri folder supplies optional ready-made Siri phrases. Add future commands' intents in their capability folder, then optionally add a phrase to that provider. App Intents are extracted automatically by Xcode from all capability folders. Siri phrases use “<command title> with Apple Bridge”. In Shortcuts, select the Apple Bridge action, fill its arguments, and save the shortcut; select that shortcut in Settings → Action Button → Shortcut. iOS allows at most ten App Shortcuts; additional commands can remain discoverable App Intent actions and run through saved Siri shortcuts.
 
-APP-INTENTS compile proof: build the AppleBridge scheme for iOS or the simulator, then run `python3 lab/iphoneintents/check.py <path-to-AppleBridge.app>`. It checks every registered iPhone handler against extracted App Intent metadata and verifies Siri phrase extraction. The local dispatcher proof is `swiftc -parse-as-library ios/Capabilities/Siri/CommandIntent.swift lab/iphoneintents/main.swift -o /tmp/ab-intent-dispatch && /tmp/ab-intent-dispatch`; it checks JSON results, local identity, disabled commands and invalid arguments. APP-INTENTS-REAL requires a saved Shortcuts workflow containing Ping iPhone and a real run returning `{"pong":true}`. Importing/saving a workflow or allowing Shortcuts on the phone requires Johan's tap; record the run as limited until that is available.
+APP-INTENTS compile proof: build the AppleBridge scheme for iOS or the simulator, then run `python3 lab/iphoneintents/check.py <path-to-AppleBridge.app>`. It checks every registered iPhone handler against extracted App Intent metadata and verifies Siri phrase extraction. The local dispatcher proof is `swiftc -parse-as-library ios/Capabilities/Siri/CommandIntent.swift lab/iphoneintents/main.swift -o /tmp/ab-intent-dispatch && /tmp/ab-intent-dispatch`; it checks JSON results, local identity, disabled commands and invalid arguments. APP-INTENTS-REAL requires a saved Shortcuts workflow containing Ping iPhone and a real run returning `{"pong":true}`. Importing/saving a workflow or allowing Shortcuts on the phone requires a tap on the phone; record the run as limited until that is available.
 
 Health write (C9): enable Health write, then tap Allow Health write access on the phone. `iphone.health.log` takes `device_id`, `kind` (`water`, `weight`, `mindful`, `workout`), positive `value`, RFC3339 `start`, and `tag` (1–128 UTF-8 bytes). Values use ml, kg, minutes and minutes respectively. Workouts also require `activity` (`walking`, `running`, `cycling`, `other`). The command checks existing write authorization without prompting and returns the saved sample UUID. Day and week summaries use the existing Health read capture and `health.summary` path.
 
@@ -83,8 +141,8 @@ The signed `/v1/iphone/capture` endpoint accepts bytes only for the paired targe
 
 The seven shell/delivery real scenarios use the Debug-only `--ab-real` entry point. Build and install once after changing Swift; subsequent runs reuse that build. Set `AB_REAL_DEVICE` to the paired physical identifier from `xcrun devicectl list devices` and `APPLE_BRIDGE_SECRET_STORE=file`, then run the corresponding YAML with `bridge-lab --level real --json`. The runner holds `lockf -k -t 3600 /tmp/ab-iphone.lock` throughout each run and restoration. It copies a private request into the app container, launches the installed app, and copies a nonce-bound receipt back. The request is removed on the phone. Evidence retains only checks, counts and digests; ephemeral gateway credentials and pairing codes are deleted with the isolated test home.
 
-Pairing and delivery create an isolated pinned HTTPS listener on the Mac. `AB_REAL_HOST` overrides the phone-reachable address (default: en0); the phone must reach that address. Delivery requires the existing development APNs key at `~/.config/apple-bridge/apns/AuthKey_L2854KRF5Z.p8`, overridden with `AB_REAL_APNS_KEY`. The runner never falls back to a simulated push. APP-CMD-REAL requires an actual APNs callback and a signed pong in the gateway ledger. Notification interaction requires the exact test button action. Approval requires the production biometric policy and the signed command result.
+Pairing and delivery create an isolated pinned HTTPS listener on the Mac. `AB_REAL_HOST` overrides the phone-reachable address (default: en0); the phone must reach that address. Delivery requires the app's development APNs key; set its path with `AB_REAL_APNS_KEY`. The runner never falls back to a simulated push. APP-CMD-REAL requires an actual APNs callback and a signed pong in the gateway ledger. Notification interaction requires the exact test button action. Approval requires the production biometric policy and the signed command result.
 
-The runner prints `>>> JOHAN` instructions and allows three minutes per interaction phase. Shell inspection uses the production capability and diagnostics views. Live qualification starts, updates and immediately ends only its own tagged ActivityKit activity; confirm the tagged widget and Lock Screen content on the phone. Intents qualification requires saving and running a tagged Ping iPhone shortcut in Shortcuts; the production intent records its pong, and cleanup requires deleting that shortcut and confirming on the phone. Directly invoking `perform()` from the probe cannot satisfy that receipt.
+The runner prints `>>>` instructions for the person at the phone and allows three minutes per interaction phase. Shell inspection uses the production capability and diagnostics views. Live qualification starts, updates and immediately ends only its own tagged ActivityKit activity; confirm the tagged widget and Lock Screen content on the phone. Intents qualification requires saving and running a tagged Ping iPhone shortcut in Shortcuts; the production intent records its pong, and cleanup requires deleting that shortcut and confirming on the phone. Directly invoking `perform()` from the probe cannot satisfy that receipt.
 
 The phone stores its previous identity, relevant switches and widget status in a protected backup before qualification. Completion restores them. A separate `--ab-real-restore <run>` launch returns a restoration receipt before unlocking, including after a timeout. A later app launch also retries restoration after interruption. Do not install a different worker's build between runs unless it contains both workers' qualification entry points.

@@ -32,7 +32,7 @@ struct RealQualificationScreen: View {
         NavigationStack {
             List {
                 Text(progress.instruction)
-                if progress.finished { Text(progress.passed ? "Checks passed. Tagged data cleaned up." : "Checks incomplete. See the qualification result on the Pro.") }
+                if progress.finished { Text(progress.passed ? "Checks passed. Tagged data cleaned up." : "Checks incomplete. See the qualification result on the Mac running it.") }
                 else { ProgressView("Keep the iPhone unlocked") }
                 if progress.screenTime && !progress.finished {
                     Button("Choose test app") { progress.picker = true }.disabled(progress.screenStage != "selection")

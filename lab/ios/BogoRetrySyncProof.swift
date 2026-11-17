@@ -1,3 +1,4 @@
+import BogoModel
 import Foundation
 
 @MainActor
