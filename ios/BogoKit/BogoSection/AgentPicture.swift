@@ -248,7 +248,7 @@ struct PictureInspector: View {
                     Group {
                         switch pictures.loads[link] ?? .loading {
                         case .shown(let image):
-                            Image(uiImage: image).resizable().scaledToFit().padding(Space.l)
+                            Image(uiImage: image).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: image.hasAlpha ? 0 : Radius.tile, style: .continuous)).padding(Space.l)
                         case .loading:
                             ProgressView().frame(height: 200)
                         case .unavailable(let why):

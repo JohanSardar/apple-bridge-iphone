@@ -172,7 +172,7 @@ struct HomeHeader: View {
 
     private var subhead: String {
         if waiting > 0 { return "Nothing runs until you approve." }
-        return approver.macs.contains { $0.state == .active } ? "Your agents haven’t asked for anything." : "Connect a Mac to get started."
+        return approver.macs.contains { $0.state == .active } ? "Nothing is waiting for you." : "Connect a Mac to get started."
     }
 }
 
@@ -336,9 +336,11 @@ struct EmptyHome: View {
             .frame(height: 210)
             .accessibilityHidden(true)
             VStack(spacing: Space.xs) {
-                Text(connected ? "Nothing needs you" : "Connect your Mac")
-                    .type(.title2)
-                    .foregroundStyle(Ink.primary)
+                if !connected {
+                    Text("Connect your Mac")
+                        .type(.title2)
+                        .foregroundStyle(Ink.primary)
+                }
                 Text(connected ? AttributedString("When an agent wants to spend money or act for you, it asks here first.")
                      : AttributedString("Agents on your Mac ask this iPhone before a protected tool runs. On the Mac, run ") + Formatting.code("bogo approver add") + AttributedString("."))
                     .type(.callout)

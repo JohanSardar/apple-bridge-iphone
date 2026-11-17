@@ -157,7 +157,7 @@ enum Formatting {
     }
 
     static func code(_ text: String) -> AttributedString {
-        var code = AttributedString(text)
+        var code = AttributedString(text.replacingOccurrences(of: " ", with: "\u{00A0}"))
         code.font = .system(.callout, design: .monospaced).weight(.medium)
         code.foregroundColor = Ink.primary
         return code
