@@ -1,0 +1,1 @@
+First public TestFlight build. Add your Mac from the BOGO tab after running `bogo approver add` on it. Your Mac's BOGO settings must allow "production" under approvers.iphone.app_attest, because TestFlight builds use App Attest's production environment.

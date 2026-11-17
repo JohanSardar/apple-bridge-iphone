@@ -22,7 +22,7 @@ class TestFlightTests(unittest.TestCase):
         for description in descriptions:
             self.assertNotIn("iphone", description.lower())
 
-    def test_upload_refuses_ipa_without_internal_only_marker(self):
+    def test_upload_checks_the_ipa_matches_its_audience(self):
         import sys
         import plistlib
         import zipfile
@@ -32,18 +32,21 @@ class TestFlightTests(unittest.TestCase):
             ipa = Path(temp) / "AppleBridge.ipa"
             ipa.write_bytes(b"not an IPA")
             with self.assertRaisesRegex(ValueError, "Export Apple Bridge again"):
-                testflight.validate_internal_ipa(ipa)
-            for marker, bundle, accepted in [(None, testflight.BUNDLE, False), (False, testflight.BUNDLE, False), (True, "other.app", False), (True, testflight.BUNDLE, True)]:
+                testflight.validate_ipa(ipa)
+            for marker, bundle, external, accepted in [
+                (None, testflight.BUNDLE, False, False), (False, testflight.BUNDLE, False, False), (True, "other.app", False, False), (True, testflight.BUNDLE, False, True),
+                (True, testflight.BUNDLE, True, False), (None, "other.app", True, False), (None, testflight.BUNDLE, True, True), (False, testflight.BUNDLE, True, True),
+            ]:
                 info = {"CFBundleIdentifier": bundle}
                 if marker is not None:
                     info["TFInternalTestingOnly"] = marker
                 with zipfile.ZipFile(ipa, "w") as archive:
                     archive.writestr("Payload/AppleBridge.app/Info.plist", plistlib.dumps(info))
                 if accepted:
-                    testflight.validate_internal_ipa(ipa)
+                    testflight.validate_ipa(ipa, external)
                 else:
                     with self.assertRaises(ValueError):
-                        testflight.validate_internal_ipa(ipa)
+                        testflight.validate_ipa(ipa, external)
 
     def test_app_store_icon_is_opaque_and_configured(self):
         import json

@@ -1,0 +1,10 @@
+What the app does: Apple Bridge is the iPhone companion for two open-source Mac tools. BOGO (https://github.com/JohanSardar/bogo) is an approver: when an AI agent on the owner's Mac wants to spend money or take a risky action, the Mac sends the request to this app, the owner reviews exactly what will run and approves with Face ID or denies. Apple Bridge (https://github.com/JohanSardar/apple-bridge) lets the owner's Mac ask the phone to do things they have switched on one by one, such as show a notification or read a Health summary.
+
+No account and no sign-in: the app pairs with the owner's own Mac, which runs the BOGO daemon or the Apple Bridge gateway. A reviewer will not have one, so no request will arrive.
+
+What you can see without a Mac:
+- BOGO tab: "Connect your Mac" with an Add Mac button. Add Mac shows the command to run on the Mac and waits for it; without a Mac it keeps waiting.
+- Activity tab: empty until approvals happen.
+- Settings tab: BOGO's Macs, Apple Bridge pairing (a QR scanner and a field to paste a pairing code), the list of capabilities with a switch each, and Diagnostics. Each permission (Health, Location, Notifications, Screen Time and so on) is asked for only when you switch on the capability that needs it.
+
+Nothing is collected or sent anywhere except to the owner's own paired Mac, encrypted, through a relay that sees only ciphertext.

@@ -65,23 +65,28 @@ def xcode_environment():
     return environment
 
 
-def validate_internal_ipa(path):
+def validate_ipa(path, external=False):
     try:
         with zipfile.ZipFile(path) as archive:
             info = plistlib.loads(archive.read("Payload/AppleBridge.app/Info.plist"))
     except (zipfile.BadZipFile, KeyError, plistlib.InvalidFileException):
         raise ValueError("The IPA is missing valid app metadata. Export Apple Bridge again before uploading.") from None
-    if info.get("CFBundleIdentifier") != BUNDLE or info.get("TFInternalTestingOnly") is not True:
+    if info.get("CFBundleIdentifier") != BUNDLE:
+        raise ValueError("The IPA belongs to a different app. Export Apple Bridge again before uploading.")
+    if external and info.get("TFInternalTestingOnly", False) is not False:
+        raise ValueError("Export Apple Bridge without internal-only TestFlight testing before uploading for external testers.")
+    if not external and info.get("TFInternalTestingOnly") is not True:
         raise ValueError("Export Apple Bridge with internal-only TestFlight testing enabled before uploading.")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Archive/export iOS for TestFlight; upload requires --upload-internal. Never adds testers.")
+    parser = argparse.ArgumentParser(description="Archive/export iOS for TestFlight; upload requires --upload. Never adds testers.")
     parser.add_argument("--profiles", required=True, help="Private JSON mapping bundle IDs to App Store profile paths")
     parser.add_argument("--output", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--build", required=True)
-    parser.add_argument("--upload-internal", action="store_true")
+    parser.add_argument("--external", action="store_true", help="Export a build external testers can install (needed for the public link). Default is internal-only.")
+    parser.add_argument("--upload", action="store_true", help="Upload the exported IPA to App Store Connect.")
     args = parser.parse_args()
     try:
         team = require("APPLE_DEVELOPER_TEAM_ID")
@@ -105,23 +110,26 @@ def main():
         archive = destination / "AppleBridge.xcarchive"
         run("xcodebuild", "-quiet", "-project", ROOT / "ios/AppleBridge.xcodeproj", "-scheme", "AppleBridge", "-configuration", "Release", "-destination", "generic/platform=iOS", "-archivePath", archive, "-derivedDataPath", ROOT / ".build/ios/DerivedData", f"DEVELOPMENT_TEAM={team}", "CODE_SIGN_STYLE=Manual", f"CODE_SIGN_IDENTITY={identity}", f"OTHER_CODE_SIGN_FLAGS=--keychain {keychain}", "APPLE_BRIDGE_APNS_ENVIRONMENT=production", f"MARKETING_VERSION={marketing}", f"CURRENT_PROJECT_VERSION={build}", *[f"{k}={v}" for k, v in settings.items()], "archive", env=xcode_environment())
         print("R1-TESTFLIGHT-ARCHIVE passed=true", flush=True)
-        options = dict(method="app-store-connect", destination="export", teamID=team, signingStyle="manual", signingCertificate=identity, provisioningProfiles={bundle: data["Name"] for bundle, (_, data) in profiles.items()}, manageAppVersionAndBuildNumber=False, testFlightInternalTestingOnly=True)
+        options = dict(method="app-store-connect", destination="export", teamID=team, signingStyle="manual", signingCertificate=identity, provisioningProfiles={bundle: data["Name"] for bundle, (_, data) in profiles.items()}, manageAppVersionAndBuildNumber=False, testFlightInternalTestingOnly=not args.external)
         export = destination / "ExportOptions.plist"
         export.write_bytes(plistlib.dumps(options))
         run("xcodebuild", "-exportArchive", "-archivePath", archive, "-exportOptionsPlist", export, "-exportPath", destination / "export", env=xcode_environment())
         ipa = destination / "export/AppleBridge.ipa"
         if not ipa.is_file():
             raise ValueError("Xcode did not export AppleBridge.ipa. Inspect the export log before retrying.")
-        validate_internal_ipa(ipa)
+        validate_ipa(ipa, args.external)
         print("R1-TESTFLIGHT-EXPORT passed=true", flush=True)
-        if args.upload_internal:
+        if args.upload:
             from tempfile import TemporaryDirectory
             with TemporaryDirectory(prefix="ab-test-asc-") as temp:
                 private = Path(temp) / f"AuthKey_{require('ASC_KEY_ID')}.p8"
                 private.symlink_to(Path(require("ASC_KEY_PATH")).expanduser().resolve())
                 run("xcrun", "altool", "--upload-app", "--type", "ios", "--file", ipa, "--apiKey", require("ASC_KEY_ID"), "--apiIssuer", require("ASC_ISSUER_ID"), env=dict(os.environ, API_PRIVATE_KEYS_DIR=temp))
-        print(f"R1-TESTFLIGHT passed=true uploaded={str(args.upload_internal).lower()}")
-    except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+        print(f"R1-TESTFLIGHT passed=true external={str(args.external).lower()} uploaded={str(args.upload).lower()}")
+    except subprocess.CalledProcessError as error:
+        print(f"TestFlight preparation failed: {Path(str(error.cmd[0])).name} {error.cmd[1] if len(error.cmd) > 1 else ''} exited with status {error.returncode}. Its output is above.", file=sys.stderr)
+        return 1
+    except (ValueError, KeyError, OSError) as error:
         print(f"TestFlight preparation failed: {error}", file=sys.stderr)
         return 1
     return 0
