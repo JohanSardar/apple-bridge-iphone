@@ -1,0 +1,5 @@
+Apple Bridge lets the AI agents on your Mac work with your iPhone. It also holds BOGO, the approver that stops an agent before it spends money or does something you would want to check first.
+
+When an agent asks, the request appears on the BOGO tab. You see exactly what will run, apart from the agent's own reason, then approve with Face ID or deny. Nothing runs until you approve.
+
+To use it you need a Mac running BOGO (https://github.com/JohanSardar/bogo) or Apple Bridge (https://github.com/JohanSardar/apple-bridge). Without one, the app opens and you can look around, but there is nothing to approve.

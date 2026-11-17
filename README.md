@@ -30,6 +30,8 @@ The gateway's [feature graph](https://github.com/JohanSardar/apple-bridge/blob/m
 
 ## TestFlight
 
-`python3 packaging/release/testflight.py --help` describes archive/export options. Use an existing Apple Distribution identity in the dedicated release keychain, private App Store distribution profiles, and path-based ASC credentials. The script needs no Mac project source. Upload remains explicit with `--upload-internal`; no release or upload runs as part of this split.
+[docs/release.md](docs/release.md) lists the release steps from `main` to the public TestFlight link: archive and upload with `packaging/release/testflight.py --external --upload`, then put the build in the public group and submit it for Beta App Review with `packaging/release/testflight_public.py --submit`. Both scripts read the private release settings, which stay outside git.
+
+A Mac running BOGO needs `"production"` in `approvers.iphone.app_attest` to pair with a TestFlight build, because TestFlight builds use App Attest's production environment.
 
 Imported from `JohanSardar/apple-bridge` at `030ebf5e00c25389205f91f682fb3e3f834e3b12`, retaining the filtered history of the app and moved tooling. The original license and engineering principles are included.
