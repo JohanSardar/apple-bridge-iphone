@@ -1,10 +1,10 @@
-.PHONY: project build simulator lint test
-
-project:
-	xcodegen generate --spec ios/project.yml --project ios
+.PHONY: build project simulator lint test
 
 build:
 	packaging/dev/build-ios.sh
+
+project:
+	xcodegen generate --spec ios/project.yml --project ios
 
 simulator:
 	packaging/dev/build-simulator.sh

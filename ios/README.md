@@ -53,7 +53,7 @@ The bundle IDs, App Groups and provisioning profile names belong to the maintain
 
 ## Versions
 
-- The marketing version is `MAJOR.MINOR.PATCH`. MAJOR stays 0 while the app is only on TestFlight. Raise MINOR when a release adds or changes something a user can see, and PATCH when it only fixes things. Keep the marketing version for fix-only builds: each new one waits for a new Beta App Review.
+- The marketing version is `MAJOR.MINOR.PATCH`. MAJOR stays 0 while the app is only on TestFlight. Raise MINOR, and reset PATCH to 0, when an upload adds or changes something a user can see. An upload that only fixes things keeps the marketing version and raises only the build number, because each new marketing version waits for a new Beta App Review. PATCH is for fixes to a version already released on the App Store.
 - The build number is one integer for the whole app. Raise it by one for every upload and never reuse or reset it, including when the marketing version changes. App Store Connect refuses a number it has already seen.
 - `ios/project.yml` keeps `0.1` and `1` for local builds. The release script stamps the real numbers into the archive with `--version` and `--build`.
 - Tag the commit of every uploaded build `v<version>+<build>`, for example `v0.1.2+5`, and push the tag. The tag is the record of what each TestFlight build contains.
@@ -62,7 +62,7 @@ The release steps are in [docs/release.md](../docs/release.md).
 
 ## Device builds
 
-A signed development build needs an Apple Development identity and the development profiles for the app and each extension, saved as `~/.config/apple-bridge/ios/dev.mobileprovision`, `alarms.mobileprovision`, `ScreenTimeMonitor.mobileprovision`, `ScreenTimeReport.mobileprovision` and `BridgeWidgets.mobileprovision`. Run `make build`. It writes `.build/ios/AppleBridge.ipa`. Override the main and alarm profiles with `APPLE_BRIDGE_IOS_PROFILE` and `APPLE_BRIDGE_ALARM_PROFILE`, or the output directory with `APPLE_BRIDGE_IOS_OUTPUT`. `packaging/dev/install-ios.sh` copies the IPA to the Mac the iPhone is plugged into (`APPLE_BRIDGE_INSTALL_HOST`, an ssh host) and installs it over USB with pymobiledevice3. Build products and generated Xcode projects are ignored.
+A signed development build needs an Apple Development identity and the development profiles for the app and each extension, saved as `~/.config/apple-bridge/ios/dev.mobileprovision`, `alarms.mobileprovision`, `ScreenTimeMonitor.mobileprovision`, `ScreenTimeReport.mobileprovision` and `BridgeWidgets.mobileprovision`. Run `make build`. It writes `.build/ios/AppleBridge.ipa`. Override the main and alarm profiles with `APPLE_BRIDGE_IOS_PROFILE` and `APPLE_BRIDGE_ALARM_PROFILE`, or the output directory with `APPLE_BRIDGE_IOS_OUTPUT`. `packaging/dev/install-ios.sh` copies the IPA to the Mac the iPhone is plugged into (`APPLE_BRIDGE_INSTALL_HOST`, an ssh host) and installs it over USB with pymobiledevice3, which must be on that Mac's PATH or in its `~/.local/bin`. Build products and generated Xcode projects are ignored.
 
 The app uses manual signing. Extension targets (widgets, App Intents and AlarmKit features) must use their own matching provisioning profiles before embedding. The current profile has no App Group identifiers; shared containers must be provisioned before use. App Intents and AlarmKit can also be implemented in the main app target.
 
