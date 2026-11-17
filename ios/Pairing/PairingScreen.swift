@@ -1,3 +1,4 @@
+import BogoSection
 import SwiftUI
 import VisionKit
 
@@ -33,6 +34,7 @@ struct PairingScreen: View {
             Button("Check connection") { Task { await state.check() } }
             Text("Revoke this iPhone from the Mac with the gateway revoke command.")
         }
+        .bogoList()
         .navigationTitle("Pairing")
         .sheet(isPresented: $scanning) {
             QRScanner { value in

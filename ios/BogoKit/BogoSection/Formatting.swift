@@ -22,6 +22,24 @@ enum Formatting {
         return result
     }
 
+    static func prose(_ value: String) -> AttributedString {
+        var result = AttributedString()
+        for segment in VisibleText.segments(value) {
+            switch segment {
+            case .text(let text):
+                result += AttributedString(text)
+            case .escape("↵"):
+                continue
+            case .escape(let label):
+                var escape = AttributedString(label)
+                escape.foregroundColor = .orange
+                escape.font = .caption.monospaced().weight(.semibold)
+                result += escape
+            }
+        }
+        return result
+    }
+
     static func value(_ value: ArgumentValue) -> AttributedString {
         switch value {
         case .null: return keyword("null")
@@ -56,17 +74,19 @@ enum Formatting {
 
     static func via(_ review: Review) -> AttributedString {
         let request = review.request
-        guard review.action != nil else { return AttributedString("on ") + visible(request.upstream) }
-        return visible(request.tool) + AttributedString(" on ") + visible(request.upstream)
+        let place = review.action == nil ? AttributedString("on ") + visible(request.upstream)
+            : visible(request.tool) + AttributedString(" on ") + visible(request.upstream)
+        guard review.titleFromRole else { return place }
+        return visible(review.action ?? request.tool) + AttributedString(" · ") + place
     }
 
     static func title(_ review: Review) -> String {
-        review.action ?? review.request.tool
+        review.title
     }
 
     static func summary(_ value: ArgumentValue) -> AttributedString {
         switch value {
-        case .string(let text) where !text.isEmpty: return visible(text)
+        case .string(let text) where !text.isEmpty: return prose(text)
         case .bool(let flag): return AttributedString(flag ? "true" : "false")
         case .number(let text): return AttributedString(text)
         default: return self.value(value)
@@ -134,6 +154,29 @@ enum Formatting {
         if calendar.isDate(date, inSameDayAs: now) { return date.formatted(date: .omitted, time: .shortened) }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
         return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    static func code(_ text: String) -> AttributedString {
+        var code = AttributedString(text.replacingOccurrences(of: " ", with: "\u{00A0}"))
+        code.font = .system(.callout, design: .monospaced).weight(.medium)
+        code.foregroundColor = Ink.primary
+        return code
+    }
+
+    static func ago(_ ms: UInt64, now: Date = Date()) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince1970 - TimeInterval(ms) / 1000))
+        if seconds < 60 { return "now" }
+        if seconds < 3600 { return "\(seconds / 60)m ago" }
+        if seconds < 86_400 { return "\(seconds / 3600)h ago" }
+        return when(Date(timeIntervalSince1970: TimeInterval(ms) / 1000), now: now)
+    }
+
+    static func symbol(_ review: Review) -> String {
+        if review.price != nil { return "creditcard" }
+        let name = (review.action ?? review.request.tool).lowercased() + " " + review.request.upstream.lowercased()
+        let symbols: [(String, String)] = [("mail", "envelope"), ("message", "bubble.left"), ("deploy", "shippingbox"), ("file", "doc"),
+                                           ("search", "magnifyingglass"), ("calendar", "calendar"), ("delete", "trash"), ("pay", "creditcard")]
+        return symbols.first { name.contains($0.0) }?.1 ?? "terminal"
     }
 
     static func remaining(_ until: Date, now: Date) -> String {
@@ -228,18 +271,5 @@ extension String {
     var lowercasedFirst: String {
         guard let first else { return self }
         return first.lowercased() + dropFirst()
-    }
-}
-
-enum BogoPage: String, CaseIterable, Identifiable {
-    case inbox, history, macs
-
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .inbox: return "Inbox"
-        case .history: return "History"
-        case .macs: return "Macs"
-        }
     }
 }

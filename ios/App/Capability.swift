@@ -1,3 +1,4 @@
+import BogoSection
 import SwiftUI
 
 typealias IPhoneCommandHandler = @MainActor (Data) async throws -> Data
@@ -53,6 +54,7 @@ struct CapabilityScreen: View {
                 }
             }
         }
+        .bogoList()
         .navigationTitle(capability.title)
         .onChange(of: enabled) { _, value in
             if capability.id == "widgets" {

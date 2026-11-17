@@ -28,7 +28,6 @@ public final class BogoSection {
     public static let denyAction = "bogo.deny"
 
     public private(set) var focusRequests = 0
-    var page: BogoPage = .inbox
     var reviewing: String?
     let approver: PhoneApprover
     @ObservationIgnored private weak var host: BogoHost?
@@ -47,9 +46,21 @@ public final class BogoSection {
         approver.pushToken = host.pushToken
     }
 
-    public var tab: some View {
-        BogoTab(section: self)
+    public var home: some View {
+        BogoHome(section: self)
     }
+
+    public var activity: some View {
+        ActivityTab(section: self)
+    }
+
+    public var macs: some View {
+        MacsScreen(approver: approver, addMac: nil)
+    }
+
+    #if DEBUG
+    public var standIn: StandInMacLink? { (approver.link as? DebugMacLinks)?.standIn }
+    #endif
 
     public static var notificationCategories: Set<UNNotificationCategory> {
         let deny = UNNotificationAction(identifier: denyAction, title: "Deny", options: [.destructive])
@@ -78,7 +89,6 @@ public final class BogoSection {
             _ = approver.deny(record, note: nil)
             await approver.flush()
         } else if action == UNNotificationDefaultActionIdentifier {
-            page = .inbox
             reviewing = record.id
             focusRequests += 1
         }
