@@ -203,11 +203,11 @@ struct PictureThumb: View {
             case .loading:
                 Color.clear.shimmering()
             case .shown(let image):
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .padding(image.hasAlpha ? size * 0.14 : 0)
+                if image.hasAlpha {
+                    Image(uiImage: image).resizable().interpolation(.high).scaledToFit().padding(size * 0.14)
+                } else {
+                    Image(uiImage: image).resizable().interpolation(.high).scaledToFill().frame(width: size, height: size)
+                }
             case .unavailable:
                 Image(systemName: "photo").font(.system(size: size * 0.36, weight: .light)).foregroundStyle(Ink.tertiary)
             }

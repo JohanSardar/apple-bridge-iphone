@@ -222,9 +222,12 @@ struct ReviewCard: View {
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
+                if let subtitle = review.subtitle, compact {
+                    Text(Formatting.visible(subtitle)).type(.body, weight: .medium).foregroundStyle(Ink.secondary).lineLimit(2)
+                }
                 Text(Formatting.via(review))
                     .type(.label)
-                    .foregroundStyle(Ink.secondary)
+                    .foregroundStyle(Ink.tertiary)
                     .lineLimit(2)
             }
             if let image = review.image {
@@ -239,9 +242,9 @@ struct ReviewCard: View {
                     .accessibilityLabel("\(review.pictures.count - 1) more pictures from the agent")
                 }
             }
-            if review.subtitle != nil || review.price != nil {
+            if (review.subtitle != nil && !compact) || review.price != nil {
                 VStack(alignment: .leading, spacing: Space.xxs) {
-                    if let subtitle = review.subtitle {
+                    if let subtitle = review.subtitle, !compact {
                         Text(Formatting.visible(subtitle)).type(.body, weight: .medium).foregroundStyle(Ink.secondary).lineLimit(2)
                     }
                     if let price = review.price { PriceView(highlight: price) }
@@ -249,6 +252,10 @@ struct ReviewCard: View {
             }
         }
         .card()
+    }
+
+    private var compact: Bool {
+        review.image == nil && review.price == nil
     }
 
     private var asks: String {

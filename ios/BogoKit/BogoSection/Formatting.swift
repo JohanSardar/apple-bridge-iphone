@@ -22,6 +22,24 @@ enum Formatting {
         return result
     }
 
+    static func prose(_ value: String) -> AttributedString {
+        var result = AttributedString()
+        for segment in VisibleText.segments(value) {
+            switch segment {
+            case .text(let text):
+                result += AttributedString(text)
+            case .escape("↵"):
+                continue
+            case .escape(let label):
+                var escape = AttributedString(label)
+                escape.foregroundColor = .orange
+                escape.font = .caption.monospaced().weight(.semibold)
+                result += escape
+            }
+        }
+        return result
+    }
+
     static func value(_ value: ArgumentValue) -> AttributedString {
         switch value {
         case .null: return keyword("null")
@@ -68,7 +86,7 @@ enum Formatting {
 
     static func summary(_ value: ArgumentValue) -> AttributedString {
         switch value {
-        case .string(let text) where !text.isEmpty: return visible(text)
+        case .string(let text) where !text.isEmpty: return prose(text)
         case .bool(let flag): return AttributedString(flag ? "true" : "false")
         case .number(let text): return AttributedString(text)
         default: return self.value(value)
