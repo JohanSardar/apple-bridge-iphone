@@ -16,8 +16,13 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
 - When adding a Mac fails on the phone, the phone and the Mac both say why,
   for example a Keychain or App Attest error.
 - Pushes from BOGO's relay open the newest waiting request.
-- Front page, security policy, contributing guide, docs index, and issue and
-  pull request templates.
+- A five-minute start for BOGO on the front page, with a recording of an
+  approval.
+- Add Mac lists BOGO Macs nearby, found over Bonjour, and the 6-digit check
+  runs over a private room on BOGO's relay. The app uses BOGO's public relay
+  by default, with no setting, or the relay a Mac's code names.
+- Front page, security policy, Code of Conduct, contributing guide, docs
+  index, and issue and pull request templates.
 - The BOGO tab, which replaces the old Approvals tab: add a Mac with matching
   codes and Face ID, review each request on the Review card with the agent's
   pictures and highlighted values, see every value under All details, slide to
@@ -30,6 +35,11 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
   stand-in Mac.
 
 ### Changed
+
+- The app guide is now a short [Build, run and pair](ios/README.md) guide,
+  with [Capabilities](docs/capabilities.md), [Lab and
+  qualification](docs/lab.md) and [Maintainer notes](docs/maintainers.md) on
+  their own pages.
 
 - One design across every screen of the app, BOGO and Apple Bridge alike, with
   the rules in [docs/design.md](docs/design.md).

@@ -1,5 +1,14 @@
 # Real iPhone qualification
 
+> **This is a historical record**, kept as it was measured in October 2026 for
+> the Apple Bridge side of the app. It describes the code and the runners as
+> they were then, and it predates the BOGO tab. Scenario codes such as
+> `APP-PAIR-REAL` are the lab files listed with plain names in
+> [Lab and qualification](lab.md). "The Pro" is the maintainer's second Mac
+> that ran the later sessions. For the BOGO tab, see BOGO's
+> [What is verified](https://github.com/JohanSardar/bogo/blob/main/docs/status.md):
+> no BOGO session on a real iPhone has been recorded yet.
+
 2026-10-30: one signed development build, one USB installation and one successful device launch on the paired iPhone 13. Existing profiles were reused. The Go runner used the MacOSX26.4 SDK. No simulator run, additional test suite, phone call, message, Health write, capture, alarm or other phone test data was created. No cleanup was needed.
 
 All 16 requested YAML scenarios were invoked with `go run ./cmd/bridge-lab run <yaml> --level real`. The initial shell/build/pair/command invocations incorrectly passed the generic replica scenario without testing the iPhone. A guard now rejects that fallthrough; the same commands were rerun and returned limited. APP-BUILD evidence records the independently observed build/signature/install/launch proof, not a passing automated acceptance handler.
@@ -23,7 +32,7 @@ All 16 requested YAML scenarios were invoked with `go run ./cmd/bridge-lab run <
 | APP-LIVE-REAL | Limited: handler immediately returns; no phone Live Activity start/update/end or widget observation. |
 | APP-CAPTURE-REAL | Limited: handler immediately returns; no camera/microphone request, Face ID, capture or cleanup exercised. |
 
-No permission prompt was triggered, so there was no pending prompt to wait three minutes for. These are missing request/observation implementations rather than evidence that Johan declined permission. Implementing real pairing, delivery and permission qualification is larger than a small test-agent fix. Feature limits remain for all unqualified behavior; the build feature already had no limit to remove.
+No permission prompt was triggered, so there was no pending prompt to wait three minutes for. These are missing request/observation implementations rather than evidence that anyone declined permission. Implementing real pairing, delivery and permission qualification is larger than a small test-agent fix. Feature limits remain for all unqualified behavior; the build feature already had no limit to remove.
 
 ## Installed-app shell and delivery harness qualification
 
@@ -53,7 +62,7 @@ The signed app build and signature verification passed. The host regressions pro
 
 The first coordinated phone batch did not establish a passing scenario. Health read, Health write, Motion and Screen Time did not return final results before their deadlines. Location returned a failure before a fix. Capture returned a failure before recording byte counts or digests. An earlier device-context run observed battery and Focus state, but no Wi-Fi information; NFC was explicitly skipped because it requires a physical tag. The initial alarm timeout was affected by the copy-polling defect and is inconclusive; its corrected rerun returned error code 1 without a confirmed alarm lifecycle.
 
-Permission instructions were printed for Health read, Health read/write, Motion & Fitness, Alarms, Location/Wi-Fi, Screen Time, Location Always/Precise, and Face ID/camera/microphone. Printing an instruction does not prove a system dialog appeared or that Johan tapped it. No tap has been confirmed by these results. No tagged Health write or alarm lifecycle has yet been confirmed, so cleanup is unqualified rather than claimed successful. Capture retains no media on disk. Feature limits remain in place.
+Permission instructions were printed for Health read, Health read/write, Motion & Fitness, Alarms, Location/Wi-Fi, Screen Time, Location Always/Precise, and Face ID/camera/microphone. Printing an instruction does not prove a system dialog appeared or that anyone tapped it. No tap has been confirmed by these results. No tagged Health write or alarm lifecycle has yet been confirmed, so cleanup is unqualified rather than claimed successful. Capture retains no media on disk. Feature limits remain in place.
 
 Screen Time currently exercises authorization, a separate tagged shield store and monitor registration/removal. Monitor callback and usage report observations remain explicit failed acceptance checks. Location's probe covers a foreground precise fix and its own tagged geofence registration/removal; it does not qualify background movement. Capture's probe covers fresh Face ID, actual photo/audio bytes and in-memory discard; it does not qualify a signed gateway upload.
 
@@ -61,9 +70,9 @@ Redacted results are in `lab/evidence/real-sensor-qualification-2026-10-30.json`
 
 The final refreshed Health read rerun also timed out without a final result. All eight sensor scenarios remain limited after these runs. No permission tap was confirmed. The phone lock was released after the last run; no further sensor run or installation remains active.
 
-## I1 qualification on the Pro, 2026-10-31
+## Qualification on the Pro, 2026-10-31
 
-PR #453's sensor harnesses are combined with the existing shell/delivery harnesses. Sensor and delivery prompt instructions append timestamped plain lines to `~/I1-NEEDS-JOHAN.txt` (`AB_JOHAN_PROMPT_FILE` overrides the destination for tests). Sensor receipts publish nonce-bound prompt phases so the host records each new step and allows its authorization window. Phone locks fail immediately when busy. Sensor qualification is Debug-only and suppresses ordinary foreground capture/upload work while active.
+The sensor harnesses from the Mac repository are combined with the existing shell/delivery harnesses. Sensor and delivery prompt instructions also append timestamped plain lines to a prompt file for the person at the phone. Sensor receipts publish nonce-bound prompt phases so the host records each new step and allows its authorization window. Phone locks fail immediately when busy. Sensor qualification is Debug-only and suppresses ordinary foreground capture/upload work while active.
 
 Capture now waits for foreground activation after Face ID and sensor authorization, while retaining expiry and capability checks. Location waits for the Always decision and reads the actual monitored-region set for registration/removal. Alarm qualification preserves the scheduling error if cleanup also fails and records cleanup separately. Their sim harnesses include delayed activation/authorization, cancellation, timeout, successful alarm cleanup and failed schedule/cleanup regressions. Failure evidence uses an error digest rather than a raw error code.
 
@@ -75,7 +84,7 @@ All fourteen requested real scenarios were attempted sequentially twice on this 
 
 ## Automated physical iPhone follow-up on the Pro, 2026-10-31
 
-This follow-up uses the connected iPhone 13 through devicectl and WebDriverAgentRunner, started with xcodebuild against the physical UDID. WDA HTTP is forwarded through iproxy. All system consent, app buttons, Shortcuts creation/deletion and observation confirmations are automated. Johan performs no taps. No T3 device tools or simulator-control tools are used. The exact paired device is retried every fifteen seconds until it returns; offline time does not consume the native observation window. Instructions go to stderr and optionally `AB_IPHONE_AUTOMATION_STEPS`, never to a request for Johan to interact.
+This follow-up uses the connected iPhone 13 through devicectl and WebDriverAgentRunner, started with xcodebuild against the physical UDID. WDA HTTP is forwarded through iproxy. All system consent, app buttons, Shortcuts creation/deletion and observation confirmations are automated. Nobody taps the phone. No T3 device tools or simulator-control tools are used. The exact paired device is retried every fifteen seconds until it returns; offline time does not consume the native observation window. Instructions go to stderr and optionally `AB_IPHONE_AUTOMATION_STEPS`, never to a request for the person at the phone to interact.
 
 Physical failures identified and fixed HealthKit bulk authorization including per-object types and medication dose events, a background pedometer callback inheriting main-actor isolation, notification completion returning off the main thread, and failure to recognize Screen Time approved-with-data-access authorization. Local regressions cover authorization partitioning, background callback delivery, notification completion ordering and authorization states. The signed incremental build is installed under the shared phone lock.
 
