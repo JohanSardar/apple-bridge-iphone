@@ -36,6 +36,8 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
 
 ### Changed
 
+- The BOGO install command uses GitHub directly, without the relay redirect.
+
 - The app guide is now a short [Build, run and pair](ios/README.md) guide,
   with [Capabilities](docs/capabilities.md), [Lab and
   qualification](docs/lab.md) and [Maintainer notes](docs/maintainers.md) on

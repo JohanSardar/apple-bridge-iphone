@@ -31,7 +31,7 @@ Apple Bridge's servers, relay, pairing or keys.
 1. **Install BOGO on your Mac** (Apple Silicon):
 
    ```sh
-   curl -fsSL https://bogo.eilmer.si:8443/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/JohanSardar/bogo/main/install.sh | sh
    ```
 
 2. **Get this app.**
