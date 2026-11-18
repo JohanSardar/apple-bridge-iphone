@@ -10,6 +10,12 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
 
 ### Added
 
+- Add a Mac from another network: in Add Mac, tap "Mac not listed? Use a
+  code", then scan the code `bogo approver add` shows on the Mac or type it.
+  The 6 digits are compared as before.
+- When adding a Mac fails on the phone, the phone and the Mac both say why,
+  for example a Keychain or App Attest error.
+- Pushes from BOGO's relay open the newest waiting request.
 - Front page, security policy, contributing guide, docs index, and issue and
   pull request templates.
 - The BOGO tab, which replaces the old Approvals tab: add a Mac with matching
@@ -32,6 +38,8 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
 
 ### Fixed
 
+- `make simulator` builds an app whose Keychain works, so it can be added to
+  a real Mac, and `make simulator` and `make test` print no warnings.
 - Pairing verifies the Mac's signing key, and Live Activity state is read from
   sealed commands.
 - The Weather shortcut, whose intent had been deleted, is gone.

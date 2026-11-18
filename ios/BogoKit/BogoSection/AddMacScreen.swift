@@ -113,7 +113,7 @@ struct AddMacScreen: View {
         VStack(alignment: .leading, spacing: Space.xl) {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Use a code").type(.title).foregroundStyle(Ink.primary)
-                Text("`bogo approver add` shows a code that starts with bogo1. Scan it, or type or paste it. This works on any network.")
+                Text(AttributedString("While ") + Formatting.code("bogo approver add") + AttributedString(" runs, your Mac shows a code that starts with bogo1. Scan it, or type or paste it here. This works on any network."))
                     .type(.callout)
                     .foregroundStyle(Ink.secondary)
             }
