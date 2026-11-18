@@ -1,6 +1,17 @@
-# iPhone app guide
+# Build, run and pair
 
-Commands run from the root of this repository. Gateway scenario commands run from a checkout of [the Mac repository](https://github.com/JohanSardar/apple-bridge) with `APPLE_BRIDGE_IPHONE_ROOT` pointing here.
+This guide builds the app, runs it in the Simulator, tries BOGO without a Mac,
+and pairs the app with BOGO or Apple Bridge on your Mac. Commands run from the
+root of this repository.
+
+Other pages:
+
+- [Capabilities](../docs/capabilities.md): what each Apple Bridge capability
+  does, the commands it takes and the permissions it needs.
+- [Lab and qualification](../docs/lab.md): the lab scenarios and the
+  real-device runners.
+- [Maintainer notes](../docs/maintainers.md): signed device builds and
+  provisioning for the maintainer's team.
 
 ## Build and run in the Simulator
 
@@ -23,7 +34,69 @@ xcrun simctl launch booted com.johansardar.applebridge.ios
 
 To work in Xcode instead, run `make project`, open `ios/AppleBridge.xcodeproj`, choose the AppleBridge scheme and an iPhone simulator, and press Run. Xcode signs Simulator builds locally, so the team in the project doesn't matter there. Run `make project` again after adding or moving files; the generated project is not tracked.
 
-To try BOGO without a Mac, use the stand-in Mac that Debug builds include. Choose Features → Face ID → Enrolled in the Simulator's menu. In the app, open BOGO → Add Mac, add the stand-in Mac and confirm with Features → Face ID → Matching Face. Then open Settings → Demo and tap Send next to a request. It arrives on the Review card three seconds later; slide to approve and match the face again.
+## Try BOGO without a Mac
+
+Debug builds include a stand-in Mac that sends realistic requests.
+
+1. In the Simulator's menu, choose Features → Face ID → Enrolled.
+2. In the app, open BOGO → Add Mac and tap **Stand-in Mac**. When the codes
+   show, tap **Confirm with Face ID**, then choose Features → Face ID →
+   Matching Face.
+3. Open Settings → Demo and tap Send next to a request. It arrives on the
+   Review card three seconds later.
+4. Read it, slide to approve, and match the face again.
+
+This is how the recording on the [front page](../README.md) was made.
+
+## Pair with BOGO on your Mac
+
+Install and set up BOGO on the Mac first ([BOGO's five-minute
+start](https://github.com/JohanSardar/bogo#get-started-in-five-minutes)).
+`bogo setup` runs `bogo approver add` for you; then, in the app, open BOGO →
+Macs → Add Mac and tap your Mac. If it isn't listed, because the phone is on
+another network, tap **Mac not listed? Use a code** and scan or type the code
+the Mac shows. Check that both screens show the same 6 digits, answer `y` on
+the Mac and confirm with Face ID. BOGO's [Add your
+iPhone](https://github.com/JohanSardar/bogo/blob/main/docs/add-your-iphone.md)
+guide covers each screen and what to do when something goes wrong.
+
+Which app builds can pair depends on App Attest:
+
+- **TestFlight and App Store builds** attest with App Attest's production
+  environment. The Mac's BOGO config needs `"production"` in
+  `approvers.iphone.app_attest`, which a new BOGO home already has.
+- **Xcode device builds** use the development environment, which a new BOGO
+  home also accepts.
+- **Simulator builds** have no App Attest. Pair them only with a BOGO daemon
+  built for testing (`cargo build -p bogo --features test-registration`), and
+  never use that daemon for real approvals. The Simulator gets no pushes; open
+  BOGO to see waiting requests.
+
+### How the BOGO tab works
+
+The BOGO tab lists waiting and recent requests, with your Macs at the top; the Activity tab lists past requests. Each request shows what will run, built
+from the exact signed bytes, apart from the agent's unverified reason. Approve
+signs with a Face ID–gated Secure Enclave key after a short arm delay; Deny
+takes an optional note; Pause stops an agent. BOGO keeps its own keys, its own
+SQLite store (`Application Support/BOGO`) and its own Keychain items, shared
+with nothing in Apple Bridge.
+
+Debug builds talk to the stand-in Mac, which replays BOGO's test vectors. To
+feed it, drop JSON commands such as `{"request":"lie-in-reason"}` into
+`Application Support/BOGO/stand-in/inbox/` in the app's data container.
+Simulator Debug builds use a software key behind simulated Face ID and skip
+App Attest; neither exists in device or Release builds.
+
+The old Face ID approvals capability is gone; BOGO replaced it. Apple Bridge
+`bridge.approval` jobs are ignored and expire on the Mac.
+
+## Pair with Apple Bridge on your Mac
+
+On the Mac, run `bridge pair --iphone --via-remote`, then scan the QR code from
+the app's Pairing screen, or paste its `ab1-` code. [Capabilities →
+Pairing](../docs/capabilities.md#pairing) explains the keys and checks
+involved. Then turn on, in the app's settings, each capability you want Apple
+Bridge's agents to use; each one stays off until you do.
 
 ## Checks
 
@@ -49,7 +122,11 @@ echo 'DEVELOPMENT_TEAM = ABCDE12345' > ios/Local.xcconfig
 make project
 ```
 
-The bundle IDs, App Groups and provisioning profile names belong to the maintainer's team. A device build under another team also needs its own App IDs and profiles for the app and each extension.
+The bundle IDs, App Groups and provisioning profile names belong to the maintainer's team. A device build under another team also needs its own App IDs and profiles for the app and each extension. A self-built app can't use the public BOGO relay's pushes, which need the maintainer's push key; see BOGO's [Running your own relay](https://github.com/JohanSardar/bogo/blob/main/docs/self-hosting-relay.md#waking-phones).
+
+## Adding a capability
+
+Capability work is isolated under `ios/Capabilities/<Name>/`. Each folder owns its descriptor and future views, permission adapter and handlers. Register it once in the append-only `ios/App/Capabilities.swift` list. XcodeGen includes the entire directory automatically. Keep registry entries from both sides when resolving merges. [Capabilities → Adding commands](../docs/capabilities.md#adding-commands) covers handlers and App Intents.
 
 ## Versions
 
@@ -59,90 +136,3 @@ The bundle IDs, App Groups and provisioning profile names belong to the maintain
 - Tag the commit of every uploaded build `v<version>+<build>`, for example `v0.1.2+5`, and push the tag. The tag is the record of what each TestFlight build contains.
 
 The release steps are in [docs/release.md](../docs/release.md).
-
-## Device builds
-
-A signed development build needs an Apple Development identity and the development profiles for the app and each extension, saved as `~/.config/apple-bridge/ios/dev.mobileprovision`, `alarms.mobileprovision`, `ScreenTimeMonitor.mobileprovision`, `ScreenTimeReport.mobileprovision` and `BridgeWidgets.mobileprovision`. Run `make build`. It writes `.build/ios/AppleBridge.ipa`. Override the main and alarm profiles with `APPLE_BRIDGE_IOS_PROFILE` and `APPLE_BRIDGE_ALARM_PROFILE`, or the output directory with `APPLE_BRIDGE_IOS_OUTPUT`. `packaging/dev/install-ios.sh` copies the IPA to the Mac the iPhone is plugged into (`APPLE_BRIDGE_INSTALL_HOST`, an ssh host) and installs it over USB with pymobiledevice3, which must be on that Mac's PATH or in its `~/.local/bin`. Build products and generated Xcode projects are ignored.
-
-The app uses manual signing. Extension targets (widgets, App Intents and AlarmKit features) must use their own matching provisioning profiles before embedding. The current profile has no App Group identifiers; shared containers must be provisioned before use. App Intents and AlarmKit can also be implemented in the main app target.
-
-Capability work is isolated under `ios/Capabilities/<Name>/`. Each folder owns its descriptor and future views, permission adapter and handlers. Register it once in the append-only `ios/App/Capabilities.swift` list. XcodeGen includes the entire directory automatically. Keep registry entries from both sides when resolving merges.
-
-APP-SHELL-SIM: runs the app’s shared Swift shell and pairing models locally with injected connection responses. It checks Settings/BOGO/Diagnostics tab structure, unpaired/paired/connecting/connected/offline/reconnected status and failed pairing recovery. Run `go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-SHELL-SIM.yaml --level sim`; no device, network service, Keychain access or permission prompt is needed. This qualifies view-model behavior, not pixel layout or biometrics. APP-SHELL-REAL retains the physical capability and diagnostics inspection.
-
-Health read: enable Health read and choose “Allow Health read access” on the phone. HealthKit deliberately does not disclose whether read access was denied; an empty capture is not proof of permission. The app only requests read access. Anchored pages, pending uploads and acknowledgements are persisted with file protection. Each paired device and sample type has an independent upload sequence; the gateway atomically commits `health.sample` changes and rejects gaps or altered retries. Deleted samples remain tombstones. Capture resumes on launch, foreground and HealthKit observer wakes; iOS controls background timing. Unsupported background-delivery types still refresh on foreground. Medication dose events use anchors; medication concepts use incremental snapshot comparison because HealthKit does not expose anchored concept queries. Workout routes retain their workout UUID and coordinates.
-
-`health.summary` takes `period` (`day` or `week`), `date` (`YYYY-MM-DD`), optional `time_zone` (default UTC), and optional `device_id`. Weeks begin Monday in that zone. It requires `health:read`. Results group by HealthKit type, unit and category (including individual sleep stages), with count, sum, average, minimum, maximum and clipped duration seconds. Quantity samples belong to their start date; duration samples can span windows. Sums are raw captured sample totals and may include overlapping sources; they do not claim parity with the Health app's deduplicated statistics. Use `records.query` with collection `health.sample` for the original records. APP-HEALTH-SIM exercises the shared capture engine with a fake HealthKit store and signed gateway ingestion; APP-HEALTH-REAL is limited pending the Health Allow tap.
-
-Pairing: on the Mac run `bridge pair --iphone --via-remote`, then scan the QR from the app’s Pairing screen (or paste its `ab1-` code). The app stores Ed25519 signing and X25519 encryption keys in a device-only Keychain item accessible after first unlock. The phone-only one-time proof binds both public keys to the code. Replica enrollment rejects phone codes. The phone receives no gateway API grants. `iphone.devices` lists device IDs for `bridge revoke <id>`.
-
-A pairing code carries the Mac's signing key. The app refuses a remote code without it, requires the response to return the same key, and checks an HMAC over the response keyed by the pairing secret, so a server holding a valid certificate can't substitute its own key. A remote code issued by an older Mac must be issued again. A direct test code without the key still works, because its TLS fingerprint pin authenticates the channel. A phone paired earlier keeps its saved key. A remotely paired phone with no saved key must pair again, because nothing would authenticate a key fetched over public TLS.
-
-Remote pairing validates the relay’s normal HTTPS certificate. Direct test HTTPS pins the certificate fingerprint in the QR. The replication mTLS port is not an iPhone endpoint. For isolated testing, `APPLE_BRIDGE_SECRET_STORE=file go run ./lab/iphonegateway -home /tmp/ab-test-iphone -address https://<reachable-host>:17781` writes a private code file and serves an iOS-compatible TLS certificate. `--pair-code <code>` is an app launch seam for unattended lab pairing; do not put the code in evidence.
-
-APP-PAIR-SIM runs with `APPLE_BRIDGE_SECRET_STORE=file go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-PAIR-SIM.yaml --level sim`. Physical QR/local-network permission prompts need an Allow tap on the phone.
-
-Delivery: the relay runs with `-apns-key <private-p8-path>` and `-apns-sandbox=true` for the development profile (`false` for production). Team, key ID and topic are fixed to the provisioned app. The gateway uses its existing private relay identity to authenticate `/iphone/push`; only signed ciphertext reaches the relay/APNs. Keys and APNs tokens must never be committed.
-
-The app registers for silent pushes at launch; silent delivery does not need notification-alert permission. Pairing/local-network/camera prompts still need a tap on the phone. APNs background delivery is best effort, so the locked-phone under-five-second scenario must be measured on hardware and is not a latency guarantee. No production relay deployment is performed by these tickets.
-
-`iphone.ping` takes `{"device_id":"iphone:…"}` inside the normal command envelope. Commands use the existing ledger, grants and owner approval. Admitted jobs survive restart; signed, encrypted jobs are dispatched on push or fetch. Expiry after possible dispatch is indeterminate. Device-only receipts prevent rerunning an ambiguous operation and retain signed results for upload after reconnecting.
-
-Future capability folders supply `Capability.handlers`; the sole capability registration remains `App/Capabilities.swift`. Enabled, available capabilities contribute handlers automatically. Each gateway command owns an `iphone_<command>_descriptors.go` file and registers its argument validator with `RegisterIPhoneCommand`. Every argument object includes `device_id`. Handlers return JSON bytes; a handler that cannot prove whether an effect occurred must throw so the result is indeterminate. Keep permission checks inside the capability handler.
-
-APP-CMD-SIM: `APPLE_BRIDGE_SECRET_STORE=file go run ./cmd/bridge-lab run lab/scenarios/iphone/APP-CMD-SIM.yaml --level sim`. It covers durable offline admission, encrypted relay delivery, signed results, replay/dedupe, expiry and read-agent denial. `go test ./internal/relay` verifies APNs JWT signing and background headers. The isolated gateway fixture writes its synthetic API token to `api-token` for Swift simulator round trips.
-
-`iphone.notify` takes `device_id`, `title`, `body`, optional `buttons: [{id, title}]` (up to four), `thread`, and `time_sensitive`. Enable Notifications in the phone settings screen and allow alerts first. iOS notification settings and Focus determine actual presentation; time-sensitive delivery does not bypass the user's choices. The thread groups notifications in Notification Center. Disabled capabilities reject commands before scheduling.
-
-With no buttons, the signed result is `{"delivered":true}` after iOS accepts the local notification request. With buttons, the command stays dispatched until a tap returns `{"action_id":"<id>"}` or opening/dismissing it returns `{"dismissed":true}`. Action receipts are saved on the phone before upload and retried on wake/foreground. T83 command expiry still applies, so unanswered notifications can become indeterminate. No notification content is sent in plaintext through the relay.
-
-Existing `Capability.handlers` keep the JSON argument/result API. A capability that waits for user interaction may instead register a `deferredHandlers` entry receiving the signed job context; returning nil leaves its receipt pending. Notifications persist their eventual response before the delivery layer signs and uploads it.
-
-AlarmKit commands use `iphone.alarm.create/list/update/cancel` and `iphone.timer.start/cancel` through the existing push delivery path. Enable Alarms and timers in the app first. Arguments always include `device_id`; create/update take `fire_at` (Unix seconds), optional `title` and `snooze_seconds` (default 540). Update replaces the schedule for `id`; cancel takes `id`. Timer start takes `duration_seconds`. Optional UUID `id` on create/start allows callers to choose an identity. List reads the app's AlarmKit alarms, including their current system state. AlarmKit provides the system alarm sound through Silent and Focus, Stop, and a Snooze countdown. The first command requests AlarmKit authorization; permission must be allowed on the phone. APP-ALARM-SIM runs the production Swift command handler with a fake adapter. APP-ALARM-REAL remains limited until the Allow tap; final hardware proof schedules a tagged alarm a minute ahead, reads it back, then cancels it.
-
-The embedded AlarmActivity widget renders AlarmKit countdowns on the Lock Screen and Dynamic Island. Signed builds additionally require `~/.config/apple-bridge/ios/alarms.mobileprovision` (override with `APPLE_BRIDGE_ALARM_PROFILE`) for `com.johansardar.applebridge.ios.alarms`. The build script installs both provisioning profiles and signs each target with its own profile.
-
-Screen Time: authorize on the phone, enable the capability, and choose opaque app/category/website tokens with Apple's picker. `iphone.screentime.shield` and `unshield` affect the named `bridge.manual` store; `schedule` takes `start_minute` and `end_minute` (local wall-clock minutes, repeating daily, at least 15 minutes, overnight supported); `cancel` stops only `bridge.downtime` and clears its separate store. Unshield does not cancel downtime. Apple's settings and other apps' stores are untouched. App and website usage is displayed inside the privacy-preserving DeviceActivity report extension for the current day; no usage data is exported to the gateway.
-
-Provision the `com.johansardar.applebridge.ios.screentimemonitor` and `.screentimereport` App IDs with Family Controls in the developer portal, then regenerate IOS_APP_DEVELOPMENT profiles through ASC including all enabled iOS devices and development certificates. Register and associate `group.com.johansardar.applebridge.ios.screentime` with the main app and monitor extension. Install profiles as `~/.config/apple-bridge/ios/ScreenTimeMonitor.mobileprovision` and `ScreenTimeReport.mobileprovision`; refresh the main profile after associating the group. `build-ios.sh` reads each target's profile independently. ASC rejects FAMILY_CONTROLS capability changes, so portal enablement is a prerequisite even though App ID/profile creation uses ASC.
-
-APP-SCREENTIME-SIM compiles the same Swift shield policy against a fake ManagedSettings adapter and checks app/category/domain shield/unshield, separate downtime ownership, overnight schedule validation and gateway command admission. Simulator UI/build verification is separate; real authorization, monitor callbacks and usage report data remain unqualified until provisioning and the Allow tap are complete.
-
-
-Location (C7): enable Location, tap Allow Location, then enable Always and Precise Location in iOS Settings. `iphone.location.current` takes `device_id`; `iphone.geofence.add` also takes `name`, `latitude`, `longitude`, and `radius` in meters (maximum 20 named regions); `iphone.geofence.remove` takes `name`; `iphone.geofence.list` republishes the named region definitions. `iphone.location.significant` takes `enabled`. Background monitoring requires Always authorization; current location requires full accuracy. The phone retains monitoring settings across launches and queues records atomically until a signed upload succeeds.
-
-Read `iphone.location` with the `iphone:read` grant for precise samples, named geofences, and `arrive`, `leave`, or `significant` events. Records are scoped to their paired device and deduplicated on retry. Removing a geofence publishes `geofence_removed`. Command receipts contain counts and monitoring state, never coordinates; location payloads travel on the separate signed record-ingestion endpoint. iOS controls background delivery timing. APP-LOC-SIM compiles and runs the actual Swift location store with a fake adapter, then uploads its records through the signed gateway endpoint and checks durable deduplication. APP-LOC-REAL is `limited: needs Allow tap`.
-
-App Intents live beside each capability's handlers in `<Capability>Intents.swift`. Each command has a concrete intent returning its JSON result; commands with arguments expose an Arguments JSON text parameter using the same command fields above (local execution supplies `device_id: iphone:local` automatically). Intents use `CommandHandlers.all`, so disabled capabilities remain disabled and adapter permission checks still apply. Failures propagate to Shortcuts. Ping is always available.
-
-Each folder registers its actions by defining concrete App Intent types; no central intent list is required. `BridgeShortcuts` in the Siri folder supplies optional ready-made Siri phrases. Add future commands' intents in their capability folder, then optionally add a phrase to that provider. App Intents are extracted automatically by Xcode from all capability folders. Siri phrases use “<command title> with Apple Bridge”. In Shortcuts, select the Apple Bridge action, fill its arguments, and save the shortcut; select that shortcut in Settings → Action Button → Shortcut. iOS allows at most ten App Shortcuts; additional commands can remain discoverable App Intent actions and run through saved Siri shortcuts.
-
-APP-INTENTS compile proof: build the AppleBridge scheme for iOS or the simulator, then run `python3 lab/iphoneintents/check.py <path-to-AppleBridge.app>`. It checks every registered iPhone handler against extracted App Intent metadata and verifies Siri phrase extraction. The local dispatcher proof is `swiftc -parse-as-library ios/Capabilities/Siri/CommandIntent.swift lab/iphoneintents/main.swift -o /tmp/ab-intent-dispatch && /tmp/ab-intent-dispatch`; it checks JSON results, local identity, disabled commands and invalid arguments. APP-INTENTS-REAL requires a saved Shortcuts workflow containing Ping iPhone and a real run returning `{"pong":true}`. Importing/saving a workflow or allowing Shortcuts on the phone requires a tap on the phone; record the run as limited until that is available.
-
-Health write (C9): enable Health write, then tap Allow Health write access on the phone. `iphone.health.log` takes `device_id`, `kind` (`water`, `weight`, `mindful`, `workout`), positive `value`, RFC3339 `start`, and `tag` (1–128 UTF-8 bytes). Values use ml, kg, minutes and minutes respectively. Workouts also require `activity` (`walking`, `running`, `cycling`, `other`). The command checks existing write authorization without prompting and returns the saved sample UUID. Day and week summaries use the existing Health read capture and `health.summary` path.
-
-APP-HEALTH-WRITE-SIM validates the shared Swift write/read/delete sequence for all four tagged sample types and signed command delivery. APP-HEALTH-WRITE-REAL is limited until the Health Allow tap. After granting read and write access for these four types, tap Test tagged Health write and cleanup. It writes each `[ab-test]` sample, queries its UUID and tag, deletes only the app-owned test sample using its retained handle (including on a failed read), and checks it is absent. The screen reports pass or incomplete; no personal samples enter evidence.
-
-BOGO tab: the old Face ID approvals capability is gone; BOGO replaces it. The tab has Inbox, History and Macs. Add a Mac after running `bogo approver add` on it, compare the six-digit code and confirm with Face ID. Each request shows what will execute (from the exact signed bytes) apart from the agent’s unverified reason; Approve signs with a Face ID–gated Secure Enclave key after a short arm delay, Deny takes an optional note, and Pause stops an agent. BOGO keeps its own keys, SQLite store (`Application Support/BOGO`) and Keychain items, shared with nothing in Apple Bridge. Debug builds talk to a stand-in Mac that replays the BOGO vectors; drop JSON commands such as `{"request":"lie-in-reason"}` into `Application Support/BOGO/stand-in/inbox/` to feed it. Simulator Debug builds use a software key behind simulated Face ID and skip App Attest; neither exists in device or Release builds. TestFlight and App Store builds attest with App Attest’s production environment, so the Mac’s BOGO config needs `"production"` in `approvers.iphone.app_attest` to pair with one; Xcode device builds use the development environment ([release steps](../docs/release.md#pairing-a-testflight-build-with-bogo)). Apple Bridge `bridge.approval` jobs are ignored and expire on the Mac.
-
-### Agent task Live Activities and bridge widgets
-
-Enable **Live Activities and widgets** in the app. The phone registers its ActivityKit push-to-start token and each running task's update token through signed `/v1/iphone/live-token` requests. Disabling ends local activities and revokes registered tokens through `/v1/iphone/live-disable` when reachable.
-
-`iphone.live.start`, `iphone.live.update` and `iphone.live.end` require `iphone:write` and take `device_id`, a stable `task_id`, `title`, `status`, and `progress` between zero and one. Start uses the push-to-start token; wait for the phone to register the task token before update/end can dispatch. Each command is sent once through the authenticated relay using the ActivityKit APNs topic and push type. That push carries only fixed text, progress 0 and an opaque task handle, because the relay and Apple can read it and nothing signs it. Treat it as a wake-up with no security meaning: a dishonest push sender can still change or end what it shows. Real title, status and progress arrive as a sealed command the app opens with its paired gateway key, then applies locally. The app returns a receipt once it has applied them. If the app can't wake, or the Activity hasn't appeared after ten seconds, the generic text stays. Missing tokens leave commands queued until expiry. Do not retry start under a new command ID unless another activity is intended.
-
-BridgeWidgets renders task title, status and progress on the Lock Screen and Dynamic Island. Its home-screen and rectangular/inline lock-screen widgets show the last delivery status with its age, rather than claiming current connectivity. The snapshot uses a shared Keychain access group (`$(AppIdentifierPrefix)com.johansardar.applebridge.ios.widgetstatus`) with after-first-unlock, device-only protection. Register `com.johansardar.applebridge.ios.widgets` and create an IOS_APP_DEVELOPMENT profile with all enabled iOS devices and development certificates. Save it as `~/.config/apple-bridge/ios/BridgeWidgets.mobileprovision`. The existing development profiles authorize the shared Keychain group; no additional App Group portal association is needed. The build script installs the profile and embeds the extension.
-
-APP-LIVE-SIM exercises signed pairing/token registration, gateway admission, ActivityKit start/update/end payloads and APNs headers, duplicate-start suppression, and token revocation using a local APNs fixture. Simulator Xcode builds cover the extension and app. APP-LIVE-REAL remains limited pending the Allow tap. Visual simulator inspection also requires an unclaimed simulator.
-
-Capture (C14): `iphone.capture.photo` and `iphone.capture.audio` always come back rejected. Capture depended on the removed Face ID approvals, so its command handlers are gone and Camera and microphone shows as unavailable. The capture model and adapter remain for APP-CAPTURE-SIM.
-
-The signed `/v1/iphone/capture` endpoint accepts bytes only for the paired target’s live dispatched command and matching request hash. It stores them in the gateway blob store and returns `blob_id`, `digest`, `size`, and `content_type`. Use the existing query-blob download path with that `blob_id`; access belongs to the command’s requesting principal under `iphone:write`, with the existing one-hour query-blob grant lifetime. APP-CAPTURE-SIM executes the shared Swift capture flow with a fake adapter and proves signed gateway upload, retrieval, and retry binding for both commands. APP-CAPTURE-REAL is limited pending camera and microphone Allow taps.
-
-The seven shell/delivery real scenarios use the Debug-only `--ab-real` entry point. Build and install once after changing Swift; subsequent runs reuse that build. Set `AB_REAL_DEVICE` to the paired physical identifier from `xcrun devicectl list devices` and `APPLE_BRIDGE_SECRET_STORE=file`, then run the corresponding YAML with `bridge-lab --level real --json`. The runner holds `lockf -k -t 3600 /tmp/ab-iphone.lock` throughout each run and restoration. It copies a private request into the app container, launches the installed app, and copies a nonce-bound receipt back. The request is removed on the phone. Evidence retains only checks, counts and digests; ephemeral gateway credentials and pairing codes are deleted with the isolated test home.
-
-Pairing and delivery create an isolated pinned HTTPS listener on the Mac. `AB_REAL_HOST` overrides the phone-reachable address (default: en0); the phone must reach that address. Delivery requires the app's development APNs key; set its path with `AB_REAL_APNS_KEY`. The runner never falls back to a simulated push. APP-CMD-REAL requires an actual APNs callback and a signed pong in the gateway ledger. Notification interaction requires the exact test button action. Approval requires the production biometric policy and the signed command result.
-
-The runner prints `>>>` instructions for the person at the phone and allows three minutes per interaction phase. Shell inspection uses the production capability and diagnostics views. Live qualification starts, updates and immediately ends only its own tagged ActivityKit activity; confirm the tagged widget and Lock Screen content on the phone. Intents qualification requires saving and running a tagged Ping iPhone shortcut in Shortcuts; the production intent records its pong, and cleanup requires deleting that shortcut and confirming on the phone. Directly invoking `perform()` from the probe cannot satisfy that receipt.
-
-The phone stores its previous identity, relevant switches and widget status in a protected backup before qualification. Completion restores them. A separate `--ab-real-restore <run>` launch returns a restoration receipt before unlocking, including after a timeout. A later app launch also retries restoration after interruption. Do not install a different worker's build between runs unless it contains both workers' qualification entry points.

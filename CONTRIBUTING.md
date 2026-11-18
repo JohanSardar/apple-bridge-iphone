@@ -35,8 +35,10 @@ make lint
 make test
 ```
 
-`make lint` enforces the no-comments rule. The [app guide](ios/README.md)
-covers signed device builds and each capability.
+`make lint` enforces the no-comments rule. [Build, run and pair](ios/README.md)
+covers building and running the app, [Capabilities](docs/capabilities.md)
+covers each capability, and [Lab and qualification](docs/lab.md) covers the
+scenarios beyond `make test`.
 
 ## What a pull request needs
 
