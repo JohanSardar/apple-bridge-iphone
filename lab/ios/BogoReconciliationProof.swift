@@ -13,6 +13,7 @@ final class ReconciliationLink: MacLink {
         messages.append(message)
     }
     func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] { [] }
+    func offer(code: String) -> RegistrationOffer? { nil }
     func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
         throw URLError(.unsupportedURL)
     }

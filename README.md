@@ -16,7 +16,9 @@ This repo is one iPhone app with two jobs:
   [BOGO daemon](https://github.com/JohanSardar/bogo) on your Mac. When an
   agent asks to run a protected tool, the BOGO tab shows the exact call on the
   Review card, and nothing runs until you slide to approve and confirm with
-  Face ID. [See it work](https://github.com/JohanSardar/bogo#see-it-work).
+  Face ID. [See it work](https://github.com/JohanSardar/bogo#see-it-work), or
+  [add your iPhone](https://github.com/JohanSardar/bogo/blob/main/docs/add-your-iphone.md)
+  to BOGO on your Mac.
 
 The two share the app and its design, and nothing else: BOGO uses no Apple
 Bridge server, relay, pairing or key.

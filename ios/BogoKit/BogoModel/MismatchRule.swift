@@ -9,7 +9,7 @@ public struct MoneyMention: Equatable, Sendable {
 public enum MismatchRule {
     private static let amount = #"(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![\d]|[.,]\d)"#
     private static let codes = Currency.common.sorted().joined(separator: "|")
-    nonisolated(unsafe) private static let patterns: [NSRegularExpression] = [
+    private static let patterns: [NSRegularExpression] = [
         #"(?:US)?\$\s?"# + amount,
         #"[€£¥]\s?"# + amount,
         amount + #"\s?[$€£¥]"#,

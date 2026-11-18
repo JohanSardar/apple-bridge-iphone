@@ -289,7 +289,15 @@ public final class PhoneApprover {
     public func completeRegistration(_ channel: RegistrationChannel, confirmation: MacConfirmation) async throws -> MacRecord {
         guard let store else { throw StoreError.sqlite("unavailable") }
         let account = Hex.string(confirmation.bogoID) + "." + UUID().uuidString
-        let key = try await ApprovalKey.create(account: account, reason: "Add \(confirmation.macName) to BOGO", proving: Registration.proofMessage(confirmation))
+        let key: CreatedApprovalKey
+        do {
+            key = try await ApprovalKey.create(account: account, reason: "Add \(confirmation.macName) to BOGO", proving: Registration.proofMessage(confirmation))
+        } catch ApprovalKeyError.cancelled {
+            throw ApprovalKeyError.cancelled
+        } catch {
+            channel.fail(RegistrationFailure.describe(error))
+            throw error
+        }
         let saved: (route: MacRoute, approverID: Data)?
         let attestation: Attestation?
         do {
@@ -297,7 +305,7 @@ public final class PhoneApprover {
             saved = try channel.saveRoute()
         } catch {
             ApprovalKey.delete(account: account)
-            channel.abort()
+            channel.fail(RegistrationFailure.describe(error))
             throw error
         }
         if let previous = mac(confirmation.bogoID) {
@@ -417,5 +425,18 @@ public final class PhoneApprover {
         if case .sent = phase { return true }
         if case .settled(let decision?) = phase { return decision == .approved }
         return false
+    }
+}
+
+public enum RegistrationFailure {
+    public static func describe(_ error: Error) -> String {
+        switch error {
+        case KeychainError.status(let status): "it couldn’t save its keys (Keychain error \(status))"
+        case KeychainError.missing: "it couldn’t save its keys"
+        case is AppAttestError: "App Attest isn’t available on this iPhone"
+        case ApprovalKeyError.notRecognized: "Face ID didn’t match"
+        case is ApprovalKeyError: "it couldn’t make its approval key"
+        default: "it couldn’t attest this app (\(String(describing: error).prefix(80)))"
+        }
     }
 }

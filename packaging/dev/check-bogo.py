@@ -37,4 +37,8 @@ with tempfile.TemporaryDirectory(prefix='bogo-proofs-') as temporary:
         if result.returncode != 0 or result.stdout.strip() != expected:
             raise SystemExit(f'{name}: failed\n{result.stdout}{result.stderr}')
         print(f'bogo {name}: passed', flush=True)
-print(f'{len(PROOFS)} BOGO proofs passed')
+result = subprocess.run(['python3', str(ROOT / 'packaging/dev/prove-approval-key-failure.py')], capture_output=True, text=True, timeout=900)
+if result.returncode != 0 or result.stdout.strip() != 'PASS S1':
+    raise SystemExit(f'approval-key-failure: failed\n{result.stdout}{result.stderr}')
+print('bogo approval-key-failure: passed', flush=True)
+print(f'{len(PROOFS) + 1} BOGO proofs passed')

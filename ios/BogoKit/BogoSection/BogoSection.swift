@@ -79,12 +79,12 @@ public final class BogoSection {
     public func remoteNotification(_ wake: BogoWake) async -> UIBackgroundFetchResult {
         await approver.link.fetch()
         await approver.flush()
-        return approver.record(bogoPrefix: wake.mac, reqID: wake.rid) == nil ? .noData : .newData
+        return woken(wake) == nil ? .noData : .newData
     }
 
     public func notificationResponse(_ wake: BogoWake, action: String) async {
         await approver.link.fetch()
-        guard let record = approver.record(bogoPrefix: wake.mac, reqID: wake.rid) else { return }
+        guard let record = woken(wake) else { return }
         if action == Self.denyAction {
             _ = approver.deny(record, note: nil)
             await approver.flush()
@@ -92,6 +92,12 @@ public final class BogoSection {
             reviewing = record.id
             focusRequests += 1
         }
+    }
+
+    private func woken(_ wake: BogoWake) -> RequestRecord? {
+        guard wake.rid.isEmpty else { return approver.record(bogoPrefix: wake.mac, reqID: wake.rid) }
+        let now = approver.nowMs
+        return approver.shown.filter { $0.approvable(at: now) }.max { $0.receivedMs < $1.receivedMs }
     }
 
     public func pushTokenChanged(_ token: Data) {

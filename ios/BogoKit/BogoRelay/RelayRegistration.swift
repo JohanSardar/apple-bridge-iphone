@@ -86,6 +86,11 @@ enum RegWire {
         Registration.code(sha(tag("bogo-reg-code"), ePubM, ePubP, nM, nP))
     }
 
+    static func abortPayload(cancelled: Bool = false, why: String? = nil) -> Data {
+        let fields: [String: Any] = cancelled ? ["cancelled": true] : ["why": why ?? ""]
+        return (try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])) ?? Data()
+    }
+
     static func json(_ data: Data) -> [String: Any]? {
         try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
@@ -170,13 +175,13 @@ final class RelayRegistration: RegistrationChannel {
         try await send(client, room, RegWire.phoneNonce, nP)
         let nM = try await wait(client, room, for: [RegWire.reveal]).payload
         guard nM.count == 16, RegWire.commitment(ePubM: ePubM, ePubP: ePubP, nM: nM) == commit else {
-            try? await send(client, room, RegWire.phoneAbort, Data())
+            try? await send(client, room, RegWire.phoneAbort, RegWire.abortPayload(why: "the Mac's reveal didn't match its commitment"))
             throw RegistrationError.tampered
         }
         let macKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: ePubM)
         let shared = try ephemeral.sharedSecretFromKeyAgreement(with: macKey).withUnsafeBytes { Data($0) }
         guard shared.contains(where: { $0 != 0 }) else {
-            try? await send(client, room, RegWire.phoneAbort, Data())
+            try? await send(client, room, RegWire.phoneAbort, RegWire.abortPayload(why: "the Mac sent a low-order key"))
             throw RegistrationError.tampered
         }
         let th = RegWire.transcriptHash(offer: room.id, ePubM: ePubM, ePubP: ePubP, commit: commit, nM: nM, nP: nP)
@@ -204,7 +209,7 @@ final class RelayRegistration: RegistrationChannel {
               let bogoID = (fields["bogoId"] as? String).flatMap(Hex.data), bogoID == RegWire.sha(macE2E),
               let challenge = (fields["challenge"] as? String).flatMap(Hex.data), challenge.count == 32,
               let name = fields["macName"] as? String, !name.isEmpty else {
-            abort()
+            fail("the Mac's confirmation didn't open")
             throw RegistrationError.tampered
         }
         confirmed = (macE2E, macRelay, bogoID)
@@ -260,10 +265,18 @@ final class RelayRegistration: RegistrationChannel {
     }
 
     func abort() {
+        stop(RegWire.abortPayload(cancelled: true))
+    }
+
+    func fail(_ why: String) {
+        stop(RegWire.abortPayload(why: why))
+    }
+
+    private func stop(_ payload: Data) {
         guard !aborted else { return }
         aborted = true
         let (client, room) = (client, room)
-        Task { try? await Self.send(client, room, RegWire.phoneAbort, Data()) }
+        Task { try? await Self.send(client, room, RegWire.phoneAbort, payload) }
     }
 
     private static func send(_ client: RelayClient, _ room: Room, _ phase: UInt8, _ payload: Data) async throws {

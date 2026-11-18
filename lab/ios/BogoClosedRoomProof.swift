@@ -13,6 +13,7 @@ final class RoomFixture: @unchecked Sendable {
     var ePubP = Data()
     var nP = Data()
     var submitted = false
+    var abortReason: String?
 
     func reply(_ request: URLRequest) throws -> (Int, Any) {
         lock.lock()
@@ -40,6 +41,7 @@ final class RoomFixture: @unchecked Sendable {
             case RegWire.hello: ePubP = payload
             case RegWire.phoneNonce: nP = payload
             case RegWire.regSubmit: submitted = true
+            case RegWire.phoneAbort: abortReason = RegWire.json(payload)?["why"] as? String
             default: break
             }
             return (200, [:])

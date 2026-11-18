@@ -276,6 +276,7 @@ public protocol RegistrationChannel: AnyObject {
     func saveRoute() throws -> (route: MacRoute, approverID: Data)?
     func submit(_ submission: RegistrationSubmission) async throws -> Registered
     func abort()
+    func fail(_ why: String)
 }
 
 @MainActor
@@ -288,4 +289,5 @@ public protocol MacLink: AnyObject {
     func send(_ message: PhoneMessage, sealed: Data, msgID: Data, to mac: MacRecord) async throws
     func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer]
     func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel
+    func offer(code: String) -> RegistrationOffer?
 }
