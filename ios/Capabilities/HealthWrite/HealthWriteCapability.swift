@@ -39,9 +39,16 @@ final class HealthKitWriter: HealthWriting {
             sample = HKCategorySample(type: HKCategoryType(.mindfulSession), value: HKCategoryValue.notApplicable.rawValue, start: start, end: end, metadata: metadata)
         default:
             let activities: [String: HKWorkoutActivityType] = ["walking": .walking, "running": .running, "cycling": .cycling, "other": .other]
-            sample = HKWorkout(activityType: activities[log.activity!]!, start: start, end: end, duration: end.timeIntervalSince(start), totalEnergyBurned: nil, totalDistance: nil, metadata: metadata)
+            let configuration = HKWorkoutConfiguration()
+            configuration.activityType = activities[log.activity!]!
+            let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: nil)
+            try await builder.beginCollection(at: start)
+            try await builder.addMetadata(metadata)
+            try await builder.endCollection(at: end)
+            guard let workout = try await builder.finishWorkout() else { throw CocoaError(.fileWriteUnknown) }
+            sample = workout
         }
-        try await store.save(sample)
+        if !(sample is HKWorkout) { try await store.save(sample) }
         if retainForProof && log.tag.hasPrefix("[ab-test]") { proofSamples[sample.uuid.uuidString] = sample }
         return sample.uuid.uuidString
     }

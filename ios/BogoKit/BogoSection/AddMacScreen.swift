@@ -2,6 +2,7 @@ import BogoCrypto
 import BogoModel
 import BogoRelay
 import SwiftUI
+import VisionKit
 
 struct AddMacScreen: View {
     let approver: PhoneApprover
@@ -10,9 +11,13 @@ struct AddMacScreen: View {
     @State private var looking = true
     @State private var step: Step = .choose
     @State private var offerName = ""
+    @State private var codeText = ""
+    @State private var codeInvalid = false
+    @State private var scanning = false
 
     enum Step {
         case choose
+        case enterCode
         case compare(RegistrationChannel, MacConfirmation?)
         case confirming(RegistrationChannel, MacConfirmation)
         case added(String)
@@ -25,6 +30,7 @@ struct AddMacScreen: View {
             Group {
                 switch step {
                 case .choose: choose
+                case .enterCode: enterCode
                 case .compare(let channel, let confirmation): compare(channel, confirmation, busy: false)
                 case .confirming(let channel, let confirmation): compare(channel, confirmation, busy: true)
                 case .added(let name): added(name)
@@ -91,10 +97,72 @@ struct AddMacScreen: View {
                     }
                     .transition(.opacity)
                 }
+                Button("Mac not listed? Use a code") {
+                    codeText = ""
+                    codeInvalid = false
+                    step = .enterCode
+                }
+                .buttonStyle(QuietButtonStyle())
             }
             .padding(Space.gutter)
             .animation(Motion.standard, value: offers.map(\.id))
         }
+    }
+
+    private var enterCode: some View {
+        VStack(alignment: .leading, spacing: Space.xl) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Use a code").type(.title).foregroundStyle(Ink.primary)
+                Text("`bogo approver add` shows a code that starts with bogo1. Scan it, or type or paste it. This works on any network.")
+                    .type(.callout)
+                    .foregroundStyle(Ink.secondary)
+            }
+            VStack(alignment: .leading, spacing: Space.xs) {
+                TextField("bogo1-", text: $codeText, axis: .vertical)
+                    .type(.mono)
+                    .lineLimit(1...3)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit { useCode() }
+                    .padding(Space.m)
+                    .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field, style: .continuous))
+                    .accessibilityLabel("Pairing code")
+                    .onChange(of: codeText) { codeInvalid = false }
+                if codeInvalid {
+                    Text("That isn’t a BOGO pairing code. Check it against your Mac.")
+                        .type(.label)
+                        .foregroundStyle(Ink.secondary)
+                }
+            }
+            Spacer()
+            VStack(spacing: Space.xxs) {
+                Button("Continue") { useCode() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(codeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if DataScannerViewController.isSupported {
+                    Button("Scan code") { scanning = true }
+                        .buttonStyle(QuietButtonStyle())
+                }
+            }
+        }
+        .padding(Space.gutter)
+        .sheet(isPresented: $scanning) {
+            PairCodeScanner { value in
+                scanning = false
+                codeText = value
+                useCode()
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private func useCode() {
+        guard let offer = approver.link.offer(code: codeText) else {
+            codeInvalid = true
+            return
+        }
+        start(offer)
     }
 
     private func compare(_ channel: RegistrationChannel, _ confirmation: MacConfirmation?, busy: Bool) -> some View {
@@ -227,10 +295,10 @@ struct AddMacScreen: View {
             } catch RegistrationError.tampered {
                 step = .failed("The codes couldn’t be checked safely, so nothing was added. Run `bogo approver add` again.")
             } catch RegistrationError.noMac {
-                step = .failed("\(offer.label) is no longer waiting, or another iPhone is adding it. Run `bogo approver add` again.")
+                step = .failed("\(offer.label) is no longer waiting, or another iPhone is adding it. Check the code, or run `bogo approver add` again.")
             } catch {
                 switch step {
-                case .choose, .compare: step = .failed("The Mac stopped the attempt. Run `bogo approver add` again.")
+                case .choose, .enterCode, .compare: step = .failed("The Mac stopped the attempt. Run `bogo approver add` again.")
                 default: break
                 }
             }
@@ -254,7 +322,7 @@ struct AddMacScreen: View {
             } catch RegistrationError.macCancelled {
                 step = .failed("The Mac stopped the attempt. Nothing was registered.")
             } catch {
-                step = .failed("This iPhone couldn’t finish adding the Mac. Nothing was registered.")
+                step = .failed("This iPhone couldn’t finish adding the Mac: \(RegistrationFailure.describe(error)). Nothing was registered.")
             }
         }
     }
@@ -279,5 +347,42 @@ struct Searching: View {
             Text("Looking for your Mac…").type(.callout).foregroundStyle(Ink.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct PairCodeScanner: UIViewControllerRepresentable {
+    let scanned: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(scanned: scanned) }
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])], recognizesMultipleItems: false)
+        scanner.delegate = context.coordinator
+        try? scanner.startScanning()
+        return scanner
+    }
+
+    func updateUIViewController(_ uiViewController: DataScannerViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator: Coordinator) {
+        uiViewController.stopScanning()
+    }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        let scanned: (String) -> Void
+        var completed = false
+
+        init(scanned: @escaping (String) -> Void) { self.scanned = scanned }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            guard !completed else { return }
+            for item in addedItems {
+                if case .barcode(let barcode) = item, let value = barcode.payloadStringValue, value.lowercased().hasPrefix("bogo1-") {
+                    completed = true
+                    scanned(value)
+                    return
+                }
+            }
+        }
     }
 }

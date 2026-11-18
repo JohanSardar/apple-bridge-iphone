@@ -297,7 +297,7 @@ public final class PhoneApprover {
             saved = try channel.saveRoute()
         } catch {
             ApprovalKey.delete(account: account)
-            channel.abort()
+            channel.fail(RegistrationFailure.describe(error))
             throw error
         }
         if let previous = mac(confirmation.bogoID) {
@@ -417,5 +417,16 @@ public final class PhoneApprover {
         if case .sent = phase { return true }
         if case .settled(let decision?) = phase { return decision == .approved }
         return false
+    }
+}
+
+public enum RegistrationFailure {
+    public static func describe(_ error: Error) -> String {
+        switch error {
+        case KeychainError.status(let status): "it couldn’t save its keys (Keychain error \(status))"
+        case KeychainError.missing: "it couldn’t save its keys"
+        case is AppAttestError: "App Attest isn’t available on this iPhone"
+        default: "it couldn’t attest this app (\(String(describing: error).prefix(80)))"
+        }
     }
 }

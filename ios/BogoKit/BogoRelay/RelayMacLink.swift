@@ -20,6 +20,7 @@ public final class RelayMacLink: MacLink {
     private var keys: [String: ChannelKeys] = [:]
     private let nearby = NearbyMacs()
     private var waiting: [String: PairCode] = [:]
+    private var typed: [String: PairCode] = [:]
 
     public init(endpoint: RelayEndpoint) {
         self.endpoint = endpoint
@@ -70,8 +71,16 @@ public final class RelayMacLink: MacLink {
         return found.map { RegistrationOffer(id: $0.id, label: $0.name, opened: $0.seen) }
     }
 
+    public func offer(code text: String) -> RegistrationOffer? {
+        guard let code = PairCode(text) else { return nil }
+        let id = Hex.string(code.room)
+        typed[id] = code
+        return RegistrationOffer(id: id, label: "Your Mac", opened: Date())
+    }
+
     public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
-        guard let code = waiting[offer.id] else { throw RegistrationError.noMac }
+        guard let code = waiting[offer.id] ?? typed[offer.id] else { throw RegistrationError.noMac }
+        typed = [:]
         nearby.stop()
         let keys = ChannelKeys()
         let client = RelayClient(endpoint: code.endpoint(publicRelay: endpoint), key: keys.relay)
@@ -181,6 +190,10 @@ public final class DebugMacLinks: MacLink {
 
     public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
         offer.id == StandInMacLink.offerID ? try await standIn.register(offer) : try await relay.register(offer)
+    }
+
+    public func offer(code: String) -> RegistrationOffer? {
+        relay.offer(code: code)
     }
 }
 #endif

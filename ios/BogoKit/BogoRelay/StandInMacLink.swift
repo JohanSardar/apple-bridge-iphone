@@ -130,6 +130,8 @@ public final class StandInMacLink: MacLink {
         return [RegistrationOffer(id: Self.offerID, label: Self.macName, opened: Date().addingTimeInterval(-12))]
     }
 
+    public func offer(code: String) -> RegistrationOffer? { nil }
+
     public func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
         StandInRegistration(link: self)
     }
@@ -312,6 +314,10 @@ final class StandInRegistration: RegistrationChannel {
             link.registered(record)
         }
         return registered
+    }
+
+    func fail(_ why: String) {
+        abort()
     }
 
     func abort() {

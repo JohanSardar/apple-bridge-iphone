@@ -22,7 +22,7 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | grep -iv beta | sort -V | tail -1)" && xcodebuild -version
       - run: make lint
-      - run: make test
+      - run: packaging/dev/no-warnings.sh make test
 
   build:
     name: Build ${{ matrix.name }}
@@ -33,7 +33,7 @@ jobs:
       matrix:
         include:
           - name: for the Simulator
-            command: make simulator
+            command: packaging/dev/no-warnings.sh make simulator
           - name: for iPhone (Release, unsigned)
             command: >-
               make project &&

@@ -12,6 +12,7 @@ final class LostResponseLink: MacLink {
     func start(macs: [MacRecord]) {}
     func fetch() async {}
     func offers(excluding macs: [MacRecord]) async -> [RegistrationOffer] { [] }
+    func offer(code: String) -> RegistrationOffer? { nil }
 
     func register(_ offer: RegistrationOffer) async throws -> RegistrationChannel {
         throw RelayError.transport
