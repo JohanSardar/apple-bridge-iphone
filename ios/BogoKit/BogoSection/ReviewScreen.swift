@@ -194,6 +194,189 @@ struct ReviewScreen: View {
     }
 }
 
+struct ApprovalGroupReview: View {
+    let approver: PhoneApprover
+    let anchor: RequestRecord
+    let group: ApprovalGroup
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var selection: String?
+    @State private var armed = false
+    @State private var busy = false
+    @State private var problem: String?
+    @State private var details: RequestRecord?
+    @State private var denying: RequestRecord?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let now = UInt64(context.date.timeIntervalSince1970 * 1000)
+            let members = approver.groupMembers(anchor)
+            let winner = members.first(where: \.groupSelectionConfirmed)
+            let submitted = members.first { $0.phase == .sent(.approved) }
+            let closed = winner != nil || members.contains(where: \.wasSuperseded)
+            let live = closed ? [] : members.filter { $0.approvable(at: now) && !approver.isPaused($0) }
+            let selected = live.first { $0.id == selection }
+            let visible = winner.map { [$0] } ?? (closed ? [] : submitted.map { [$0] } ?? live)
+            scroll(visible, selected: selected, winner: winner, submitted: closed ? nil : submitted, closed: closed)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let selected, winner == nil, submitted == nil, approver.canApprove(selected) {
+                        VStack(spacing: Space.xxs) {
+                            SlideToApprove(armed: armed, armDelay: TimeInterval(selected.armDelayMs) / 1000, busy: busy) {
+                                approve(selected)
+                            }
+                            .id(selected.id)
+                            Button("Deny selected option") { denying = selected }
+                                .buttonStyle(QuietButtonStyle(tint: Ink.secondary))
+                                .disabled(busy)
+                        }
+                        .padding(.horizontal, Space.gutter)
+                        .padding(.top, Space.m)
+                        .background(Ink.canvas.ignoresSafeArea(edges: .bottom))
+                    }
+                }
+                .task(id: scenePhase == .active ? selected?.id : nil) {
+                    await arm(scenePhase == .active ? selected : nil)
+                }
+        }
+        .background(Ink.canvas.ignoresSafeArea())
+        .navigationTitle("Review requests")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .sheet(item: $details) { record in
+            AllDetails(record: record, macName: approver.mac(record.bogoID)?.name)
+        }
+        .sheet(item: $denying) { record in
+            DenySheet(agent: record.request?.agentName) { note in
+                denying = nil
+                if case .nothingSigned(let reason) = approver.deny(record, note: note) { problem = reason }
+            }
+        }
+        .alert("Nothing was approved", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(problem ?? "")
+        }
+    }
+
+    private func scroll(_ cards: [RequestRecord], selected: RequestRecord?, winner: RequestRecord?, submitted: RequestRecord?, closed: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.l) {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(Formatting.visible(group.title)).type(.title).foregroundStyle(Ink.primary)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Title provided by the agent").type(.label).foregroundStyle(Ink.tertiary)
+                }
+                Hairline()
+                ForEach(cards) { record in
+                    option(record, checked: record.id == (winner ?? submitted ?? selected)?.id)
+                        .disabled(winner != nil || submitted != nil || busy)
+                }
+                if let winner {
+                    Text("This group is closed.").type(.callout).foregroundStyle(Ink.secondary)
+                    let status = winner.phase == .settled(nil) ? "Approved on another device" : Formatting.status(winner, now: approver.nowMs)
+                    let ink = Formatting.history(winner).mark == .approved || winner.phase == .settled(nil) ? Ink.positive : Ink.secondary
+                    Text(status ?? "Approved").type(.headline).foregroundStyle(ink)
+                } else if closed {
+                    Text("Another option was selected.").type(.callout).foregroundStyle(Ink.secondary)
+                } else if submitted != nil {
+                    Text("Approval submitted. Waiting for confirmation from BOGO.")
+                        .type(.callout).foregroundStyle(Ink.secondary)
+                } else if let selected, let request = selected.request {
+                    Text("Approving one option withdraws the others.").type(.callout).foregroundStyle(Ink.secondary)
+                    Hairline()
+                    let review = Review(request)
+                    ReviewSummary(review: review, received: selected.receivedMs)
+                    ReasonSection(review: review)
+                    DetailsSection(review: review, macName: approver.mac(selected.bogoID)?.name, waiting: 1) {
+                        details = selected
+                    }
+                } else if cards.isEmpty {
+                    Text(Formatting.status(anchor, now: approver.nowMs) ?? "This group has no options available.")
+                        .type(.callout).foregroundStyle(Ink.secondary)
+                } else {
+                    Text("Select an option to review its details.").type(.callout).foregroundStyle(Ink.secondary)
+                }
+            }
+            .padding(.horizontal, Space.gutter)
+            .padding(.vertical, Space.l)
+        }
+    }
+
+    private func option(_ record: RequestRecord, checked: Bool) -> some View {
+        Button {
+            if selection != record.id {
+                armed = false
+                selection = record.id
+            }
+        } label: {
+            if let request = record.request {
+                let review = Review(request)
+                HStack(alignment: .top, spacing: Space.s) {
+                    Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(checked ? Ink.primary : Ink.tertiary)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(Formatting.visible(Formatting.title(review))).type(.headline).foregroundStyle(Ink.primary)
+                        if let subtitle = review.subtitle {
+                            Text(Formatting.prose(subtitle)).type(.callout).foregroundStyle(Ink.secondary)
+                        }
+                        Text(Formatting.action(review) + AttributedString(" · ") + Formatting.visible(request.agentName))
+                            .type(.label).foregroundStyle(Ink.secondary)
+                        if review.subtitle == nil {
+                            ForEach(previewRows(review)) { argument in
+                                if let value = argument.leaf {
+                                    Text(Formatting.visible(argument.label ?? "Argument") + AttributedString(" · ") + Formatting.summary(value))
+                                        .type(.callout).foregroundStyle(Ink.secondary).lineLimit(3)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if let price = review.price, case .money(let amount, _) = price.value {
+                        Text(amount.formatted).type(.headline).monospacedDigit().foregroundStyle(Ink.primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Space.m)
+                .background(Ink.raised, in: RoundedRectangle(cornerRadius: Radius.field))
+                .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(checked ? .isSelected : [])
+    }
+
+    private func previewRows(_ review: Review) -> [Review.ArgumentRow] {
+        let titlePath = review.highlights.first { $0.role == .title }?.path
+        let pricePath = review.price?.path
+        return Array((review.arguments ?? []).filter { row in
+            guard row.depth == 0, row.leaf != nil else { return false }
+            return ![titlePath, pricePath].contains { path in
+                guard case .key(let key)? = path?.first, path?.count == 1 else { return false }
+                return key == row.label
+            }
+        }.prefix(3))
+    }
+
+    private func arm(_ record: RequestRecord?) async {
+        armed = false
+        guard let record else { return }
+        try? await Task.sleep(for: .seconds(TimeInterval(record.armDelayMs) / 1000))
+        if !Task.isCancelled, scenePhase == .active, selection == record.id { armed = true }
+    }
+
+    private func approve(_ record: RequestRecord) {
+        busy = true
+        Task {
+            let result = await approver.approve(record)
+            busy = false
+            switch result {
+            case .decided: Haptics.soft()
+            case .nothingSigned(let reason): problem = reason
+            }
+        }
+    }
+}
+
 struct ApprovedSummary: Equatable {
     let title: String
     let price: MoneyAmount?

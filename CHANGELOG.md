@@ -10,6 +10,10 @@ link yet; the first one will collect everything under **Unreleased**. Changes to
 
 ### Added
 
+- Compare alternative tool calls in one BOGO inbox entry. Select one and
+  slide to approve it with Face ID. BOGO 0.2.0 withdraws the remaining
+  options once the selected call meets its approval threshold.
+
 - Add a Mac from another network: in Add Mac, tap "Mac not listed? Use a
   code", then scan the code `bogo approver add` shows on the Mac or type it.
   The 6 digits are compared as before.

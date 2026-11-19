@@ -181,6 +181,7 @@ enum Formatting {
         case .approverRevoked: return "This iPhone was revoked"
         case .agentPaused: return "Refused · agent paused"
         case .otherBoot: return "BOGO restarted"
+        case .superseded: return "Another option was selected"
         case .unknown: return "Ended"
         }
     }
@@ -199,7 +200,7 @@ enum Formatting {
     static func status(_ record: RequestRecord, now: UInt64) -> String? {
         switch record.phase {
         case .pending: return record.expired(at: now) ? "Expired" : nil
-        case .sent(.approved): return "Approved · sent to the Mac"
+        case .sent(.approved): return record.approvalGroup == nil ? "Approved · sent to the Mac" : "Approval submitted"
         case .sent(.denied): return "Denied"
         case .settled(.approved?): return "Approved"
         case .settled: return "Decided on another approver"
@@ -225,7 +226,7 @@ enum Formatting {
     static func history(_ record: RequestRecord) -> (text: String, mark: Mark) {
         switch record.phase {
         case .pending: return ("Waiting", .ended)
-        case .sent(.approved): return ("Approved · sending to the Mac", .approved)
+        case .sent(.approved): return record.approvalGroup == nil ? ("Approved · sending to the Mac", .approved) : ("Approval submitted", .ended)
         case .settled(.approved?): return ("Approved", .approved)
         case .finished(.approved?, let result):
             return approvalStood(result) ? ("Approved · " + outcome(result).lowercasedFirst, .approved) : (outcome(result), .ended)
