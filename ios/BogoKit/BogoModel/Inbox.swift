@@ -6,7 +6,7 @@ public enum Decision: Equatable, Sendable {
 }
 
 public enum EndReason: String, Sendable, CaseIterable {
-    case callEnded, sessionClosed, ownerCancel, expired, agentRevoked, approverRevoked, agentPaused, otherBoot, unknown
+    case callEnded, sessionClosed, ownerCancel, expired, agentRevoked, approverRevoked, agentPaused, otherBoot, superseded, unknown
 }
 
 public enum Outcome: String, Sendable, CaseIterable {
@@ -47,10 +47,24 @@ extension RequestPhase {
         case (.pending, .ended(let why)): return .ended(nil, why)
         case (.sent(let decision), .ended(let why)): return .ended(decision, why)
         case (.settled(let decision), .ended(let why)): return .ended(decision, why)
+        case (.finished(let decision, .unknown), .outcome(let outcome)) where outcome != .unknown && outcome != .noRecord:
+            return .finished(decision, outcome)
+        case (.finished(let decision, .unknown), .ended(let why)):
+            return .ended(decision, why)
         case (.finished, _): return self
         case (_, .outcome(let outcome)): return .finished(decision, outcome)
         default: return self
         }
+    }
+}
+
+public struct ApprovalGroup: Equatable, Sendable {
+    public let id: String
+    public let title: String
+
+    public init(id: String, title: String) {
+        self.id = id
+        self.title = title
     }
 }
 
@@ -64,9 +78,28 @@ public struct RequestRecord: Identifiable, Equatable, Sendable {
     public let receivedMs: UInt64
     public var phase: RequestPhase
     public var changedMs: UInt64
+    public var settlementReceived: Bool
     public let request: ApprovalRequest?
+    public let approvalGroup: ApprovalGroup?
 
-    public init(bogoID: Data, reqID: Data, bytes: Data, bootSeq: UInt64, pauseEpoch: UInt64, armDelayMs: UInt64, receivedMs: UInt64, phase: RequestPhase, changedMs: UInt64) {
+    public var approvalGroupID: String? {
+        approvalGroup.map { Hex.string(bogoID) + ":" + $0.id }
+    }
+
+    public var wasSuperseded: Bool {
+        if case .ended(_, .superseded) = phase { return true }
+        return false
+    }
+
+    public var groupSelectionConfirmed: Bool {
+        if settlementReceived { return true }
+        switch phase {
+        case .settled, .finished(_, .executed), .finished(_, .notSent): return true
+        default: return false
+        }
+    }
+
+    public init(bogoID: Data, reqID: Data, bytes: Data, bootSeq: UInt64, pauseEpoch: UInt64, armDelayMs: UInt64, receivedMs: UInt64, phase: RequestPhase, changedMs: UInt64, approvalGroup: ApprovalGroup? = nil, settlementReceived: Bool = false) {
         self.bogoID = bogoID
         self.reqID = reqID
         self.bytes = bytes
@@ -76,6 +109,8 @@ public struct RequestRecord: Identifiable, Equatable, Sendable {
         self.receivedMs = receivedMs
         self.phase = phase
         self.changedMs = changedMs
+        self.approvalGroup = approvalGroup
+        self.settlementReceived = settlementReceived
         let decoded = RequestBytes.decode(bytes)
         self.request = decoded?.bogoID == bogoID && decoded?.nonce == reqID ? decoded : nil
     }
@@ -109,14 +144,15 @@ public enum Inbox {
     public static let endedShownMs: UInt64 = 86_400_000
 
     public static func entries(_ records: [RequestRecord], now nowMs: UInt64) -> [InboxEntry] {
-        var groups: [Data: [RequestRecord]] = [:]
-        var order: [Data] = []
+        var groups: [String: [RequestRecord]] = [:]
+        var order: [String] = []
+        let selected = Set(records.filter { $0.groupSelectionConfirmed || $0.wasSuperseded }.compactMap(\.approvalGroupID))
         var single: [InboxEntry] = []
         var greyed: [InboxEntry] = []
-        for record in records where record.phase.decision == nil {
+        for record in records where record.phase.decision == nil && !record.wasSuperseded {
+            if let group = record.approvalGroupID, selected.contains(group) { continue }
             if record.deniable(at: nowMs) {
-                if let request = record.request {
-                    let key = record.bogoID + request.groupKey
+                if let key = record.approvalGroupID ?? record.request.map({ Hex.string(record.bogoID + $0.groupKey) }) {
                     if groups[key] == nil { order.append(key) }
                     groups[key, default: []].append(record)
                 } else {
@@ -127,9 +163,14 @@ public enum Inbox {
             }
         }
         let live = order.compactMap { groups[$0] }.map { members in
-            InboxEntry(records: members.sorted { $0.receivedMs < $1.receivedMs }, live: true)
+            InboxEntry(records: members.sorted { ($0.receivedMs, $0.id) < ($1.receivedMs, $1.id) }, live: true)
         } + single
-        return live.sorted { newest($0) > newest($1) } + greyed.sorted { $0.primary.changedMs > $1.primary.changedMs }
+        var seenGroups = Set(live.compactMap { $0.primary.approvalGroupID })
+        let ended = greyed.sorted { $0.primary.changedMs > $1.primary.changedMs }.filter { entry in
+            guard let group = entry.primary.approvalGroupID else { return true }
+            return seenGroups.insert(group).inserted
+        }
+        return live.sorted { newest($0) > newest($1) } + ended
     }
 
     public static func history(_ records: [RequestRecord]) -> [RequestRecord] {

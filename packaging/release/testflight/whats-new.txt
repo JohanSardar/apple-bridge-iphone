@@ -1,1 +1,1 @@
-First public TestFlight build. Add your Mac from the BOGO tab after running `bogo approver add` on it. Your Mac's BOGO settings must allow "production" under approvers.iphone.app_attest, because TestFlight builds use App Attest's production environment.
+In BOGO, open a group of alternative tool calls, pick an option, and slide to approve it with Face ID. The other options disappear when BOGO confirms your selection. Grouped approvals require BOGO 0.2.0 on the Mac. For TestFlight pairing, allow "production" under approvers.iphone.app_attest on the Mac.

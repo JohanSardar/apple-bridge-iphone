@@ -3,7 +3,7 @@ import BogoModel
 import Foundation
 
 public enum MacMessage: Equatable, Sendable {
-    case request(reqID: Data, bootSeq: UInt64, bytes: Data, pauseEpoch: UInt64, armDelayMs: UInt64)
+    case request(reqID: Data, bootSeq: UInt64, bytes: Data, pauseEpoch: UInt64, armDelayMs: UInt64, approvalGroup: ApprovalGroup? = nil)
     case settled(reqID: Data)
     case ended(reqID: Data, why: EndReason)
     case boot(bootSeq: UInt64, bootID: Data)
@@ -22,7 +22,13 @@ public enum MacMessage: Equatable, Sendable {
         case ("request", 1):
             guard let reqID = bytes("reqId"), reqID.count == 40, let bootSeq = number("bootSeq"), let raw = bytes("bytes"),
                   let pauseEpoch = number("pauseEpoch"), let armDelayMs = number("armDelayMs") else { return nil }
-            self = .request(reqID: reqID, bootSeq: bootSeq, bytes: raw, pauseEpoch: pauseEpoch, armDelayMs: armDelayMs)
+            var group: ApprovalGroup?
+            if let value = fields["approvalGroup"] {
+                guard let info = value as? [String: Any], let id = info["id"] as? String, id.utf8.count == 32,
+                      Hex.data(id)?.count == 16, let title = info["title"] as? String, !title.isEmpty else { return nil }
+                group = ApprovalGroup(id: id, title: title)
+            }
+            self = .request(reqID: reqID, bootSeq: bootSeq, bytes: raw, pauseEpoch: pauseEpoch, armDelayMs: armDelayMs, approvalGroup: group)
         case ("settled", 2):
             guard let reqID = bytes("reqId"), reqID.count == 40 else { return nil }
             self = .settled(reqID: reqID)
@@ -34,7 +40,11 @@ public enum MacMessage: Equatable, Sendable {
             self = .boot(bootSeq: bootSeq, bootID: bootID)
         case ("outcome", 5):
             guard let reqID = bytes("reqId"), reqID.count == 40, let word = fields["outcome"] as? String else { return nil }
-            self = .outcome(reqID: reqID, outcome: word == "live" ? nil : Outcome(rawValue: word) ?? .unknown)
+            if word == "superseded" {
+                self = .ended(reqID: reqID, why: .superseded)
+            } else {
+                self = .outcome(reqID: reqID, outcome: word == "live" ? nil : Outcome(rawValue: word) ?? .unknown)
+            }
         case ("registered", 6):
             guard let txID = bytes("txId"), txID.count == 32, let approverID = bytes("approverId"), approverID.count == 32 else { return nil }
             self = .registered(txID: txID, approverID: approverID)

@@ -97,7 +97,7 @@ public final class BogoSection {
     private func woken(_ wake: BogoWake) -> RequestRecord? {
         guard wake.rid.isEmpty else { return approver.record(bogoPrefix: wake.mac, reqID: wake.rid) }
         let now = approver.nowMs
-        return approver.shown.filter { $0.approvable(at: now) }.max { $0.receivedMs < $1.receivedMs }
+        return approver.shown.filter { $0.approvalGroup == nil ? $0.approvable(at: now) : approver.canApprove($0) }.max { $0.receivedMs < $1.receivedMs }
     }
 
     public func pushTokenChanged(_ token: Data) {

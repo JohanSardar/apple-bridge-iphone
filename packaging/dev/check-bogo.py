@@ -16,6 +16,8 @@ PROOFS = [
     ('early-sync', 'BogoRelay', 'BogoEarlySyncProof.swift', [], 'PASS'),
     ('retry-sync', 'BogoRelay', 'BogoRetrySyncProof.swift', [], 'PASS'),
     ('reconciliation', 'BogoRelay', 'BogoReconciliationProof.swift', [], ''),
+    ('group-sync-during-dispatch', 'BogoRelay', 'BogoGroupedApprovalProof.swift', [str(VECTORS), 'sync-during-dispatch'], ''),
+    ('group-worker-disconnect', 'BogoRelay', 'BogoGroupedApprovalProof.swift', [str(VECTORS), 'worker-disconnect'], ''),
 ]
 
 

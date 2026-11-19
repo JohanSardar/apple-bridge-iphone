@@ -12,8 +12,14 @@ struct BogoHome: View {
         NavigationStack {
             HomeScreen(section: section, zoom: zoom, addMac: { addingMac = true })
                 .navigationDestination(item: $section.reviewing) { id in
-                    ReviewScreen(approver: section.approver, id: id)
-                        .navigationTransition(.zoom(sourceID: id, in: zoom))
+                    Group {
+                        if let record = section.approver.record(id), let group = record.approvalGroup {
+                            ApprovalGroupReview(approver: section.approver, anchor: record, group: group)
+                        } else {
+                            ReviewScreen(approver: section.approver, id: id)
+                        }
+                    }
+                    .navigationTransition(.zoom(sourceID: id, in: zoom))
                 }
                 .navigationDestination(for: MacsRoute.self) { _ in
                     MacsScreen(approver: section.approver, addMac: { addingMac = true })
@@ -202,7 +208,13 @@ struct PendingRow: View {
         let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.xs)) : AnyLayout(HStackLayout(alignment: .center, spacing: Space.s))
         HStack(alignment: .center, spacing: Space.s) {
             layout {
-            if let request = record.request {
+            if let group = record.approvalGroup {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Formatting.visible(group.title)).type(.headline).foregroundStyle(Ink.primary)
+                    Text(entry.count == 1 ? "1 option" : "\(entry.count) options")
+                        .type(.label).foregroundStyle(Ink.secondary)
+                }
+            } else if let request = record.request {
                 let review = Review(request)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Formatting.visible(Formatting.title(review)))

@@ -102,12 +102,13 @@ public final class PhoneApprover {
         guard let store else { return }
         let bogoID = mac.bogoID
         switch message {
-        case .request(let reqID, let bootSeq, let bytes, let pauseEpoch, let armDelayMs):
+        case .request(let reqID, let bootSeq, let bytes, let pauseEpoch, let armDelayMs, let group):
             guard mac.state != .removed else { return }
             let existing = records.first { $0.bogoID == bogoID && $0.reqID == reqID }
             if existing == nil || existing?.receivedMs == 0 {
                 var record = RequestRecord(bogoID: bogoID, reqID: reqID, bytes: bytes, bootSeq: bootSeq, pauseEpoch: pauseEpoch, armDelayMs: armDelayMs,
-                                           receivedMs: now, phase: existing?.phase ?? .pending, changedMs: now)
+                                           receivedMs: now, phase: existing?.phase ?? .pending, changedMs: now, approvalGroup: group,
+                                           settlementReceived: existing?.settlementReceived ?? false)
                 if record.phase.isPending, bootSeq < mac.bootSeq { record.phase = .ended(nil, .otherBoot) }
                 if record.phase.isPending, isPaused(record) { record.phase = .ended(nil, .agentPaused) }
                 try store.save(record)
@@ -135,8 +136,20 @@ public final class PhoneApprover {
         }
     }
 
+    public func groupMembers(_ record: RequestRecord) -> [RequestRecord] {
+        guard let id = record.approvalGroupID else { return [] }
+        return shown.filter { $0.approvalGroupID == id }
+            .sorted { ($0.receivedMs, $0.id) < ($1.receivedMs, $1.id) }
+    }
+
+    public func canApprove(_ record: RequestRecord) -> Bool {
+        guard record.approvable(at: clock()), !isPaused(record), mac(record.bogoID)?.state == .active else { return false }
+        return !groupMembers(record).contains { $0.groupSelectionConfirmed || $0.wasSuperseded || $0.phase == .sent(.approved) }
+    }
+
     public func approve(_ record: RequestRecord) async -> DecisionResult {
-        guard let mac = mac(record.bogoID), mac.state == .active, let request = record.request, record.approvable(at: clock()), !isPaused(record) else {
+        guard let current = self.record(record.id), let mac = mac(current.bogoID),
+              let request = current.request, canApprove(current) else {
             return .nothingSigned("This request can no longer be approved.")
         }
         let signature: Data
@@ -153,7 +166,7 @@ public final class PhoneApprover {
         } catch {
             return .nothingSigned("Face ID isn’t available. Nothing was approved.")
         }
-        guard let current = self.record(record.id), current.approvable(at: clock()), !isPaused(current) else {
+        guard let current = self.record(record.id), canApprove(current) else {
             return .nothingSigned("This request ended before you approved it. Nothing was sent.")
         }
         return decide(current, .approved, message: .approval(reqID: current.reqID, alg: ApprovalKey.algorithm, sig: signature))
@@ -222,7 +235,9 @@ public final class PhoneApprover {
             let waiting = records.filter { Self.awaitingOutcome($0.phase) }
             for record in waiting { try? store.markUnsent(reqID: record.reqID) }
             for mac in macs where mac.state == .active {
-                let open = waiting.filter { $0.bogoID == mac.bogoID }.map(\.reqID)
+                let open = records.filter {
+                    $0.bogoID == mac.bogoID && (Self.awaitingOutcome($0.phase) || ($0.approvalGroup != nil && $0.phase.isPending))
+                }.map(\.reqID)
                 if !open.isEmpty { try? store.enqueue(.sync(reqIDs: open), to: mac.bogoID, nowMs: clock()) }
             }
             for mac in macs where mac.state == .waiting {
@@ -386,13 +401,15 @@ public final class PhoneApprover {
         guard let store else { return }
         if var record = records.first(where: { $0.bogoID == bogoID && $0.reqID == reqID }) {
             let next = record.phase.applying(event)
-            guard next != record.phase else { return }
+            let settled = record.settlementReceived || event == .settled
+            guard next != record.phase || settled != record.settlementReceived else { return }
             record.phase = next
+            record.settlementReceived = settled
             record.changedMs = now
             try store.save(record)
         } else {
             let placeholder = RequestRecord(bogoID: bogoID, reqID: reqID, bytes: Data(), bootSeq: 0, pauseEpoch: 0, armDelayMs: 0, receivedMs: 0,
-                                            phase: RequestPhase.pending.applying(event), changedMs: now)
+                                            phase: RequestPhase.pending.applying(event), changedMs: now, settlementReceived: event == .settled)
             try store.save(placeholder)
         }
     }
