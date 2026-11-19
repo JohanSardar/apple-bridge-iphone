@@ -46,7 +46,7 @@ public final class Store {
         """)
         try addColumns("macs", ["mac_e2e BLOB", "mac_mailbox TEXT", "tx_id BLOB", "channel_account TEXT", "push_token BLOB", "relay_url TEXT"])
         try addColumns("outbox", ["envelope BLOB"])
-        try addColumns("records", ["approval_group_id TEXT", "approval_group_title TEXT"])
+        try addColumns("records", ["approval_group_id TEXT", "approval_group_title TEXT", "settlement_received INTEGER NOT NULL DEFAULT 0"])
     }
 
     private func addColumns(_ table: String, _ columns: [String]) throws {
@@ -112,20 +112,20 @@ public final class Store {
     }
 
     public func records() throws -> [RequestRecord] {
-        try query("SELECT bogo_id, req_id, bytes, boot_seq, pause_epoch, arm_delay_ms, received_ms, phase, decision, note, detail, changed_ms, approval_group_id, approval_group_title FROM records") { row in
+        try query("SELECT bogo_id, req_id, bytes, boot_seq, pause_epoch, arm_delay_ms, received_ms, phase, decision, note, detail, changed_ms, approval_group_id, approval_group_title, settlement_received FROM records") { row in
             let group = row.optionalText(12).flatMap { id in row.optionalText(13).map { ApprovalGroup(id: id, title: $0) } }
             return RequestRecord(bogoID: row.data(0), reqID: row.data(1), bytes: row.data(2), bootSeq: row.u64(3), pauseEpoch: row.u64(4), armDelayMs: row.u64(5),
                           receivedMs: row.u64(6), phase: Store.phase(row.text(7), decision: row.optionalText(8), note: row.optionalText(9), detail: row.optionalText(10)),
-                          changedMs: row.u64(11), approvalGroup: group)
+                          changedMs: row.u64(11), approvalGroup: group, settlementReceived: row.u64(14) != 0)
         }
     }
 
     public func save(_ record: RequestRecord) throws {
         let (phase, decision, note, detail) = Store.columns(record.phase)
-        try run("INSERT OR REPLACE INTO records (bogo_id, req_id, bytes, boot_seq, pause_epoch, arm_delay_ms, received_ms, phase, decision, note, detail, changed_ms, approval_group_id, approval_group_title) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [.data(record.bogoID), .data(record.reqID), .data(record.bytes),
+        try run("INSERT OR REPLACE INTO records (bogo_id, req_id, bytes, boot_seq, pause_epoch, arm_delay_ms, received_ms, phase, decision, note, detail, changed_ms, approval_group_id, approval_group_title, settlement_received) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [.data(record.bogoID), .data(record.reqID), .data(record.bytes),
             .int(record.bootSeq), .int(record.pauseEpoch), .int(record.armDelayMs), .int(record.receivedMs), .text(phase), decision.map(Value.text) ?? .null,
             note.map(Value.text) ?? .null, detail.map(Value.text) ?? .null, .int(record.changedMs),
-            record.approvalGroup.map { .text($0.id) } ?? .null, record.approvalGroup.map { .text($0.title) } ?? .null])
+            record.approvalGroup.map { .text($0.id) } ?? .null, record.approvalGroup.map { .text($0.title) } ?? .null, .int(record.settlementReceived ? 1 : 0)])
     }
 
     public func enqueue(_ message: PhoneMessage, to bogoID: Data, nowMs: UInt64) throws {

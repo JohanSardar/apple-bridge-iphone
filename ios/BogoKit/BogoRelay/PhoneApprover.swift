@@ -107,7 +107,8 @@ public final class PhoneApprover {
             let existing = records.first { $0.bogoID == bogoID && $0.reqID == reqID }
             if existing == nil || existing?.receivedMs == 0 {
                 var record = RequestRecord(bogoID: bogoID, reqID: reqID, bytes: bytes, bootSeq: bootSeq, pauseEpoch: pauseEpoch, armDelayMs: armDelayMs,
-                                           receivedMs: now, phase: existing?.phase ?? .pending, changedMs: now, approvalGroup: group)
+                                           receivedMs: now, phase: existing?.phase ?? .pending, changedMs: now, approvalGroup: group,
+                                           settlementReceived: existing?.settlementReceived ?? false)
                 if record.phase.isPending, bootSeq < mac.bootSeq { record.phase = .ended(nil, .otherBoot) }
                 if record.phase.isPending, isPaused(record) { record.phase = .ended(nil, .agentPaused) }
                 try store.save(record)
@@ -400,13 +401,15 @@ public final class PhoneApprover {
         guard let store else { return }
         if var record = records.first(where: { $0.bogoID == bogoID && $0.reqID == reqID }) {
             let next = record.phase.applying(event)
-            guard next != record.phase else { return }
+            let settled = record.settlementReceived || event == .settled
+            guard next != record.phase || settled != record.settlementReceived else { return }
             record.phase = next
+            record.settlementReceived = settled
             record.changedMs = now
             try store.save(record)
         } else {
             let placeholder = RequestRecord(bogoID: bogoID, reqID: reqID, bytes: Data(), bootSeq: 0, pauseEpoch: 0, armDelayMs: 0, receivedMs: 0,
-                                            phase: RequestPhase.pending.applying(event), changedMs: now)
+                                            phase: RequestPhase.pending.applying(event), changedMs: now, settlementReceived: event == .settled)
             try store.save(placeholder)
         }
     }
